@@ -1,3 +1,5 @@
 *.o
 *.dep
 *.dSYM
+.DS_Store
+doc/*

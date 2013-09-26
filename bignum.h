@@ -34,6 +34,8 @@
 #define BM_ERROR_NOT_A_NUMBER 1
 #define BM_ERROR_NUMBER_TOO_BIG 2
 #define BM_ERROR_ALLOC_FAILED 3
+#define BM_ERROR_NOT_IMPLEMENTED 4
+#define BM_ERROR_DIV_BY_ZERO 5
 #define BM_ERROR_INTERNAL_ERROR 666
 
 /**
@@ -82,6 +84,8 @@ int bm_mul( bm_t *, const bm_t *, const bm_t * );
 int bm_div( bm_t *, const bm_t *, const bm_t * );
 int bm_mod( bm_t *, const bm_t *, const bm_t * );
 int bm_powm( bm_t *, const bm_t *, const bm_t *, const bm_t * );
+int bm_lsl( bm_t *, const bm_t *, int );
+int bm_asr( bm_t *, const bm_t *, int );
 
 int bm_set_si( bm_t *, int32_t );
 int bm_set_ui( bm_t *, uint32_t );

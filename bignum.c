@@ -51,6 +51,16 @@ static int bm_is_zero( const bm_t * a ) {
 	return 1;
 }
 
+static void bm_trim( bm_t *r, int n ) {
+	assert(m > 0);
+
+	while (r->b[n-1] == 0) {
+		n--;
+	}
+	r->size = n;
+}
+
+
 /**
  * \brief Resize i.e. grow the internal buffer to hold the
  *   bignum. In case of statically allocated memory this
@@ -620,7 +630,8 @@ int bm_get_b( const bm_t *a, unsigned char *b, int i ) {
 }
 
 /**
- * \brief A multiplication.
+ * \brief A signed multiplication. This can be considered an elementary school
+ *   level algorithm :)
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to multiply.
@@ -670,6 +681,10 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 	for (o = 0; o < b1->size; o++) {
 		uint64_t B=(uint64_t)b1->b[o];
 		c = 0ULL;
+		
+		if (B == 0) {
+			continue;
+		}
 		for (i = 0; i < a1->size; i++) {
 			uint64_t A = a1->b[i];
 			uint64_t R = r->b[o+i];
@@ -682,10 +697,136 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 		}
 	}
 
-	r->size = o+i;
+	bm_trim(r,o+i);
+	
 	return BM_SUCCESS;
 }
 
+/**
+ * \brief Bitwise logical shift left.
+ *
+ * \param a A pointer to a result bignum.
+ * \param a A pointer to a bignum to shift.
+ * \param n Number of bits to shift (0 to 31).
+ * \return BM_SUCCESS if OK, error otherwise.
+ */
+
+int bm_lsl( bm_t *r, const bm_t *a, int n ) {
+	uint32_t c;
+	int i;
+
+	n %= 32;
+	bm_set_si(r,0);
+
+	if (a->size >= r->size) {
+		if ((i = bm_resize(r)) != BM_SUCCESS) {
+			return i;
+		}
+	}
+	for (i = 0, c = 0; i < a->size; i++) {
+		uint32_t A = a->b[n];
+		r->b[i] = A << n | c;
+		c = A >> 32-n;
+	}
+	if (c) {
+		r->b[i++] = c;
+	}
+
+	r->size = i;
+	r->sign = a->sign;
+	return BM_SUCCESS;
+}
+
+/**
+ * \brief Bitwise arithmetic shift right.
+ *
+ * \param a A pointer to a result bignum.
+ * \param a A pointer to a bignum to shift.
+ * \param n Number of bits to shift (0 to 31).
+ * \return BM_SUCCESS if OK, error otherwise.
+ */
+
+int bm_asr( bm_t *r, const bm_t *a, int n ) {
+	uint32_t c;
+	int i;
+
+	n %= 32;
+	bm_set_si(r,0);
+
+	for (i = a->size-1; i >= 0; i--) {
+		uint32_t A = a->b[i];
+		r->b[i]  = A >> n | c;
+		c = A << 32-n;
+	}
+
+	bm_trim(r,a->size);
+	r->sign = a->sign;
+	return BM_SUCCESS;
+}
+
+/**
+ * \brief A signed division. This can be considered an elementary school
+ *   level algorithm, which takes a lousy O(n^2) time.
+ *
+ * \param r A pointer to a result bignumber.
+ * \param a A pointer to a bignumber to devident.
+ * \param b A pointer to a bignumber to divisor.
+ *
+ * \return BM_SUCCESS if multiplication succeeded. Note that
+ *   if there is an error, the target bignun will be in inconsistent
+ *   state, i.e. one cannot expect it to contain a valid number.
+ */
+
+int bm_div( bm_t *r, const bm_t *a, const bm_t *b ) {
+	int i,o,n,m;
+	const bm_t *a1,*b1;
+	uint64_t c;
+
+	/* make sure we got enough space for the result */
+
+	m = a->size - b->size + 1;
+
+	/* check for pathetic cases */
+
+	if (bm_is_zero(b)) {
+		return BM_ERROR_DIV_BY_ZERO;
+	}
+	if (m <= 0 || bm_is_zero(a)) {
+		return bm_set_si(r,0);
+	}
+
+	/* we will probably have a non-zero result */
+
+	r->sign = a->sign * b->sign;
+	m = BM_MAX(a->size,b->size);
+
+	if (m > r->maxs) {
+		if ((n = bm_resize(r)) != BM_SUCCESS) {
+			return n;
+		}
+	}
+
+	/*  */
+
+	/* initialize the target bignum to all zeroes to ease the calculations */
+	while (--m >= 0) {
+		r->b[m] = 0;
+	}
+	if (a->size >= b->size) {
+		a1 = a; 
+		b1 = b;
+	} else {
+		a1 = b;
+		b1 = a;
+	}
+	for (o = 0; o < b1->size; o++) {
+		uint64_t B=(uint64_t)b1->b[o];
+		c = 0ULL;
+
+	}
+
+	return BM_SUCCESS;
+}
 
 /**
 
