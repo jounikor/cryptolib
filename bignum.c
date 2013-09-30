@@ -52,7 +52,7 @@ static int bm_is_zero( const bm_t * a ) {
 }
 
 static void bm_trim( bm_t *r, int n ) {
-	assert(m > 0);
+	assert(n > 0);
 
 	while (r->b[n-1] == 0) {
 		n--;
@@ -130,10 +130,11 @@ void bm_done( bm_t *m ) {
  * \brief Sub two bignumers and neglect the sign. Note that the output
  *   bignumber must not be any of the input bignumbers. This function
  *   also assumes 'a' is always greater or equal than 'b'.
+ *   The result bignum may overlap with input bignums.
  *
- * \param r A pointer to a result bignumber.
- * \param a A pointer to a bignumber to substract from.
- * \param b A pointer to a bignumber to substract.
+ * \param[out] r A pointer to a result bignumber.
+ * \param[in] a A pointer to a bignumber to substract from.
+ * \param[in] b A pointer to a bignumber to substract.
  *
  * \return BM_SUCCESS if substraction succeeded.
  */
@@ -161,7 +162,7 @@ static int bm_sub_nosign( bm_t *r, const bm_t *a, const bm_t *b ) {
 			B = b->b[n];
 		}
 
-		c = A - B - c;
+		c = A - B + c;
         r->b[n] = c;
         c >>= 32;
     }
@@ -173,6 +174,8 @@ static int bm_sub_nosign( bm_t *r, const bm_t *a, const bm_t *b ) {
 			 * output when printing the bignum.
 			 */
 			n--;
+		} else {
+			break;
 		}
     }
 
@@ -247,7 +250,7 @@ static int bm_cmp_nosign( const bm_t *a, const bm_t *b ) {
 
 	/* both bignums are equal "size" in memory */
 
-    for (n = 0; n < a->size; n++) {
+    for (n =a->size-1; n >= 0; n--) {
         if (a->b[n] > b->b[n]) {
             return 1;
         }
@@ -331,6 +334,80 @@ int bm_add( bm_t *r, const bm_t *a, const bm_t *b ) {
 	r->sign = a->sign;
 	return bm_add_nosign(r,a,b);
 }
+
+
+/**
+ * \brief Add an unsigned integer to a bignum.
+ *
+ * \param[inout] a A pointer to a destination bignum.
+ * \param[in] v An unsigned integer to add.
+ *
+ * \return BM_SUCCESS if OK, error otherwise.
+ */
+
+int bm_add_ui( bm_t * a, uint32_t v ) {
+    int m,n;
+    uint64_t c = 0;
+    uint64_t d = (uint64_t)v;
+
+    for (n = 0; n < a->size; n++) {
+        uint64_t A = a->b[n];
+        c = A + d + c;
+        a->b[n] = c;
+        c >>= 32;
+    }
+    if (c > 0) {
+        if (a->size == a->maxs) {
+            if ((m = bm_resize(a)) != BM_SUCCESS) {
+                return m;
+            }
+        }
+        a->b[a->size++] = c;
+    }
+
+    return BM_SUCCESS;
+}
+
+/**
+ * \brief Add a signed integer to a bignum.
+ *
+ * \param[inout] a A pointer to a destination bignum.
+ * \param[in] v A signed integer to add.
+ *
+ * \return BM_SUCCESS if OK, error otherwise.
+ */
+
+int bm_add_si( bm_t * a, int32_t v ) {
+    int m,n;
+    uint64_t c = 0;
+    uint64_t d = (uint64_t)v;
+	int sign = v >= 0 ? BM_POS : BM_NEG;
+
+	/* The obly case where sign can change is when the size of the bignum is 1 */
+
+	if (a->size == 1 && a->sign != sign) {
+		a->sign *= sign;
+	}
+    for (n = 0; n < a->size; n++) {
+        uint64_t A = a->b[n];
+        c = A + d + c;
+        a->b[n] = c;
+        c >>= 32;
+    }
+    if (c > 0) {
+		if (a->sign == BM_NEG && c != 0xffffffff) {
+			if (a->size == a->maxs) {
+				if ((m = bm_resize(a)) != BM_SUCCESS) {
+					return m;
+				}
+			}
+			a->b[a->size++] = c;
+		}
+    }
+
+    return BM_SUCCESS;
+}
+
 
 /**
  * \brief Sub (signed) two bignumers. Note that the output bignumber
@@ -768,76 +845,151 @@ int bm_asr( bm_t *r, const bm_t *a, int n ) {
  * \brief A signed division. This can be considered an elementary school
  *   level algorithm, which takes a lousy O(n^2) time.
  *
- * \param r A pointer to a result bignumber.
- * \param a A pointer to a bignumber to devident.
- * \param b A pointer to a bignumber to divisor.
+ * \param[out] q A pointer to a quotient bignumber.
+ * \param[out] r A pointer to s reminder bignumber.
+ * \param[in] n A pointer to a bignumber to numerator.
+ * \param[in] d A pointer to a bignumber to denominator.
  *
  * \return BM_SUCCESS if multiplication succeeded. Note that
  *   if there is an error, the target bignun will be in inconsistent
  *   state, i.e. one cannot expect it to contain a valid number.
  */
 
-int bm_div( bm_t *r, const bm_t *a, const bm_t *b ) {
-	int i,o,n,m;
-	const bm_t *a1,*b1;
-	uint64_t c;
-
-	/* make sure we got enough space for the result */
-
-	m = a->size - b->size + 1;
+int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
+	int i,o,m;
+    bm_t t;
 
 	/* check for pathetic cases */
 
-	if (bm_is_zero(b)) {
+	if (bm_is_zero(d)) {
 		return BM_ERROR_DIV_BY_ZERO;
 	}
-	if (m <= 0 || bm_is_zero(a)) {
-		return bm_set_si(r,0);
-	}
+
+    m = bm_cmp_nosign(n,d);
+
+    if (m == 0) {
+        m = n->sign * d->sign;
+        bm_set_si(r,0);
+        return bm_set_si(q,m);
+    }
+    if (m < 0) {
+        bm_set_si(r,0);
+        return bm_set_si(q,0);
+    }
 
 	/* we will probably have a non-zero result */
 
-	r->sign = a->sign * b->sign;
-	m = BM_MAX(a->size,b->size);
+    m = n->size - d->size + 1;
 
-	if (m > r->maxs) {
-		if ((n = bm_resize(r)) != BM_SUCCESS) {
-			return n;
+	while (m > q->maxs) {
+		if ((i = bm_resize(r)) != BM_SUCCESS) {
+            return i;
 		}
+        if ((i = bm_resize(q)) != BM_SUCCESS) {
+            return i;
+        }
 	}
 
-	/*  */
+    /* long divide algorithm.. not the greatest ;-) The algorithm is
+	 * basically the normal school division algorithm shifting in 
+	 * long words of numerator as needed.
+	 *
+     * Shift in denominator size of long words of nominator for division
+	 */
+	
+    bm_set_si(q,0);
+    i = n->size;
+    
+	/* this is special, we are hand crafting remainder bignum.. */
+	r->size = 0;
 
-	/* initialize the target bignum to all zeroes to ease the calculations */
-	while (--m >= 0) {
-		r->b[m] = 0;
-	}
-	if (a->size >= b->size) {
-		a1 = a; 
-		b1 = b;
-	} else {
-		a1 = b;
-		b1 = a;
-	}
-	for (o = 0; o < b1->size; o++) {
-		uint64_t B=(uint64_t)b1->b[o];
-		c = 0ULL;
+    while (i > 0) {
+        uint32_t c = 0;
+      
+		for (m = r->size; m > 0; m--) {
+			r->b[m] = r->b[m-1];
+		}
+		r->b[0] = n->b[--i];
+		r->size++;
 
+		while ((m = bm_cmp_nosign(r,d)) >= 0) {
+			c++;
+			bm_sub_nosign(r,r,d);
+		}
+        if (c > 0) {
+            if ((m = bm_add_ui(q,c)) != BM_SUCCESS) {
+                return m;
+            }
+        }
+    }
+
+    /* and last fix the sign */
+
+    r->sign = n->sign * d->sign;
+    q->sign = r->sign;
+	return BM_SUCCESS;
+}
+
+
+/**
+ * \brief Calculate a modular exponentiation.
+ * \param[out] r A pointer to a result bignum.
+ * \param[in] b A pointer to a base bignum value.
+ * \param[in] e A pointer to an exponent bignum value.
+ * \param[in] m A pointer to a modulus bignum value.
+ *
+ * \return BM_SUCCESS if OK. Negative error code otherwise.
+ *
+ * The following algorithm is used for calculating the modular
+ * exponentiation.
+ *
+ *
+ * function modular_pow(base, exponent, modulus)
+ *   result := 1
+ *	while exponent > 0
+ *		if (exponent mod 2 == 1):
+ *		   result := (result * base) mod modulus
+ *	   exponent := exponent >> 1
+ *	   base = (base * base) mod modulus
+ *   return result
+ *
+ */
+
+int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
+	int n,i;
+	bm_t bt, et;
+
+	if ((n = bm_init(&bt)) != BM_SUCCESS) {
+		return n;
 	}
+	if ((n = bm_init(&et)) != BM_SUCCESS) {
+		bm_done(&bt);
+		return n;
+	}
+	if (bm_set(bt,b) != BM_SUCCESS) {
+		bm_done(&bt);
+		bm_done(&et);
+		return n;
+	}
+	if (bm_set(et,e) != BM_SUCCESS) {
+		bm_done(&bt);
+		bm_done(&et);
+		return n;
+	}
+
+	bm_set_ui(r,0);
+
+	while (0) {
+	}
+
+
+
 
 	return BM_SUCCESS;
 }
 
-/**
 
-function modular_pow(base, exponent, modulus)
-    result := 1
-	while exponent > 0
-		if (exponent mod 2 == 1):
-		   result := (result * base) mod modulus
-	   exponent := exponent >> 1
-	   base = (base * base) mod modulus
-   return result
+/**
 
 */
 
@@ -871,6 +1023,9 @@ int main( int argc, char **argv) {
 	int n,m;
 
 	bm_t r,a,b,c,d;
+	bm_t nom,den,rem,quo;
+
+	bm_init(&nom); bm_init(&den); bm_init(&rem); bm_init(&quo);
 
 	bm_init(&r);
 	bm_init(&a);
@@ -879,9 +1034,19 @@ int main( int argc, char **argv) {
 	bm_init(&d);
 
 
+	bm_set_si(&nom,66778811);
+	bm_set_si(&den,678);
+	bm_div(&quo,&rem,&nom,&den);
+	output("bm_div() quotient: ",&quo);
+	output("bm_div() reminder: ",&rem);
 
+	bm_set_b(&nom,num1,sizeof(num1));
+	bm_set_b(&den,num2,sizeof(num2));
+	bm_div(&quo,&rem,&nom,&den);
+	output("bm_div() quotient: ",&quo);
+	output("bm_div() reminder: ",&rem);
 
-
+	//
 
 	//bm_set_ui(&a,0xffffffff);
 	//bm_set_ui(&b,0xffffffff);
@@ -929,7 +1094,7 @@ int main( int argc, char **argv) {
 	bm_mul(&r,&c,&d);
 	output("**bm_mul()",&r);
 
-
+	bm_done(&nom); bm_done(&den); bm_done(&rem); bm_done(&quo);
 
 	bm_done(&r);
 	bm_done(&a);
