@@ -23,7 +23,7 @@
 #define BM_STATIC_ALLOC	/**< undefine if dynamically allocated memory is ok */
 
 #define BM_MAX(a,b) (a) < (b) ? (b) : (a)
-#define BM_RESIZE(a) (a) * 3 / 2
+#define BM_RESIZE(a) (a) + BM_MAX_SIZE  /**< resize by 1024 bits */
 
 /**
  * \bried Error codes that bignum functions may return.

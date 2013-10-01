@@ -74,11 +74,11 @@ static int bm_resize( bm_t *r ) {
 #if defined(BM_STATIC_ALLOC)
 	return -BM_ERROR_NUMBER_TOO_BIG;
 #else
-	if ((r->b = realloc(r->b,BM_RESIZE(r->size))) == NULL) {
+	if ((r->b = realloc(r->b,BM_RESIZE(r->maxs))) == NULL) {
 		return -BM_ERROR_ALLOC_FAILED;
 	}
 
-	r->maxs = BM_RESIZE(r->size);
+	r->maxs = BM_RESIZE(r->maxs);
 #endif
 	return BM_SUCCESS;
 }
