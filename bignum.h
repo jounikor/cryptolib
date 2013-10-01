@@ -23,7 +23,7 @@
 #define BM_STATIC_ALLOC	/**< undefine if dynamically allocated memory is ok */
 
 #define BM_MAX(a,b) (a) < (b) ? (b) : (a)
-#define BM_RESIZE(a) (a) * 3 / 2
+#define BM_RESIZE(a) (a) + BM_MAX_SIZE  /**< resize by 1024 bits */
 
 /**
  * \bried Error codes that bignum functions may return.
@@ -45,6 +45,7 @@
 
 #define BM_POS 1
 #define BM_NEG -1
+#define BM_NAN 0
 
 /**
  * \struct bm_s bignum.h bignum.h
@@ -74,7 +75,7 @@ typedef bm_t * bmp_t;
  *
  */
 
-int bm_init( bm_t * );
+void bm_init( bm_t * );
 void bm_done( bm_t * );
 int bm_add( bm_t *, const bm_t *, const bm_t * );
 int bm_add_ui( bm_t *, uint32_t );
@@ -86,7 +87,7 @@ int bm_cmp_ui( const bm_t *, uint32_t );
 int bm_mul( bm_t *, const bm_t *, const bm_t * );
 int bm_div( bm_t *, bm_t *, const bm_t *, const bm_t * );
 int bm_powm( bm_t *, const bm_t *, const bm_t *, const bm_t * );
-int bm_lsl( bm_t *, const bm_t *, int );
+int bm_asl( bm_t *, const bm_t *, int );
 int bm_asr( bm_t *, const bm_t *, int );
 
 int bm_set_si( bm_t *, int32_t );

@@ -60,6 +60,32 @@ static void bm_trim( bm_t *r, int n ) {
 	r->size = n;
 }
 
+/**
+ * \brief Set bignum size.
+ *
+ *
+ */
+
+static int bm_set_size( bm_t *a, int s ) {
+    int n;
+
+#if !defined(BM_STATIC_ALLOC)
+    while (s > a->maxs) {
+        if ((n = bm_resize(a)) != BM_SUCCESS) {
+            return n;
+        }
+    }
+#else
+    if (a->maxs > 0 && s > a->maxs) {
+        return -BM_ERROR_NUMBER_TOO_BIG;
+    } else {
+        a->maxs = BM_MAX_SIZE;
+    }
+#endif
+    a->size = s;
+    return BM_SUCCESS;
+}
+
 
 /**
  * \brief Resize i.e. grow the internal buffer to hold the
@@ -72,13 +98,17 @@ static void bm_trim( bm_t *r, int n ) {
 
 static int bm_resize( bm_t *r ) {
 #if defined(BM_STATIC_ALLOC)
-	return -BM_ERROR_NUMBER_TOO_BIG;
+	if (r->maxs == 0) {
+        r->maxs = BM_MAX_SIZE;
+    } else {    
+        return -BM_ERROR_NUMBER_TOO_BIG;
+    }
 #else
-	if ((r->b = realloc(r->b,BM_RESIZE(r->size))) == NULL) {
+	if ((r->b = realloc(r->b,BM_RESIZE(r->maxs))) == NULL) {
 		return -BM_ERROR_ALLOC_FAILED;
 	}
 
-	r->maxs = BM_RESIZE(r->size);
+	r->maxs = BM_RESIZE(r->maxs);
 #endif
 	return BM_SUCCESS;
 }
@@ -91,19 +121,13 @@ static int bm_resize( bm_t *r ) {
  * \return BM_SUCCESS if OK.
  */
 
-int bm_init( bm_t *m ) {
-    m->size = 1;
-    m->sign = BM_POS;
-    m->maxs = BM_MAX_SIZE;
+void bm_init( bm_t *m ) {
+    m->size = 0;
+    m->sign = BM_NAN;
+    m->maxs = 0;
 #if !defined(BM_STATIC_ALLOC)
-    m->b = malloc(BM_MAX_SIZE*sizeof(uint32_t));
-
-    if (m == NULL) {
-        return -BM_ERROR_ALLOC_FAILED;
-    }
+    m->b = NULL;
 #endif
-	m->b[0] = 0;
-    return BM_SUCCESS;
 }
 
 
@@ -120,10 +144,10 @@ void bm_done( bm_t *m ) {
     if (m->b) {
         free(m->b);
         m->b = NULL;
-        m->maxs = 0;
     }
 #endif
     m->size = 0;
+    m->maxs = 0;
 }
 
 /**
@@ -315,9 +339,8 @@ int bm_cmp_ui( const bm_t *a, uint32_t v ) {
 
 
 /**
- * \brief Add (signed) two bignumers. Note that the output bignumber
- *   must not be any of the input bignumbers. The output bignum is
- *   also "reset" every time.
+ * \brief Add (signed) two bignumers. Note that the result bignum
+ *   can be one of the input bignums.
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to add.
@@ -391,7 +414,7 @@ int bm_add_ui( bm_t * a, uint32_t v ) {
 }
 
 /**
- * \brief Add a signed integer to a bignum.
+ * \brief Add a signed integer to a bignum. 
  *
  * \param[inout] a A pointer to a destination bignum.
  * \param[in] v A signed integer to add.
@@ -432,8 +455,8 @@ int bm_add_si( bm_t * a, int32_t v ) {
 
 
 /**
- * \brief Sub (signed) two bignumers. Note that the output bignumber
- *   must not be any of the input bignumbers.
+ * \brief Sub (signed) two bignumers. Note that the result 
+ *   bignum may be one of the input bignums.
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to add.
@@ -485,8 +508,11 @@ int bm_sub( bm_t *r, const bm_t *a, const bm_t *b ) {
  */
 
 int bm_set_si( bm_t *r, int32_t l ) {
-    r->size = 1;
+    int n;
 
+    if ((n = bm_set_size(r,1)) != BM_SUCCESS) {
+        return n;
+    }
     if (l >= 0) {
         r->b[0] = (uint32_t)l;
         r->sign = BM_POS;
@@ -508,15 +534,20 @@ int bm_set_si( bm_t *r, int32_t l ) {
  */
 
 int bm_set_ui( bm_t *r, uint32_t l ) {
-    r->size = 1;
+    int n;
+
+    if ((n = bm_set_size(r,1)) != BM_SUCCESS) {
+        return n;
+    }
+    
     r->sign = BM_POS;
     r->b[0] = l;
-
     return BM_SUCCESS;
 }
 
 /**
- * \brief Set a bignumber value from an array of octets.
+ * \brief Set a bignumber value from an array of octets. The bignum is
+ *   implicitly set to positive value.
  *
  * \param r A pointer to a bignumber structure.
  * \param b A pointer to an octet array.
@@ -562,12 +593,13 @@ int bm_set_b( bm_t *r, const unsigned char *b, int i ) {
 	}
 
 	r->size = m;
+    r->sign = BM_POS;
     return BM_SUCCESS;
 }
 
 
 /**
- * \brief Copies a bignum from another bignum. Note that this fucntion
+ * \brief Copies a bignum from another bignum.
  *
  * \param d A pointer to a destination bignum.
  * \param a A pointer to a source bignum.
@@ -579,15 +611,9 @@ int bm_set( bm_t *d, const bm_t *a ) {
 	int n;
 	
 	if (a->maxs > d->maxs) {
-		/* resize.. */
-#if defined(BM_STATIC_ALLOC)
-		return -BM_ERROR_NUMBER_TOO_BIG;
-#else
-		if ((d->b = realloc(d->b,a->maxs)) == NULL) {
-			return -BM_ERROR_ALLOC_FAILED;
-		}
-		d->maxs = a->maxs;
-#endif
+	    if ((n = bm_set_size(d,a->maxs)) != BM_SUCCESS) {
+            return n;
+        }
 	}
 
 	d->size = a->size;
@@ -730,7 +756,10 @@ int bm_get_b( const bm_t *a, unsigned char *b, int i ) {
 
 /**
  * \brief A signed multiplication. This can be considered an elementary school
- *   level algorithm :)
+ *   level algorithm :) Note that the result bignum can be the same as either
+ *   one of the input bignums. Also both input bignums can be the same. This is
+ *   done at the expense of a temporary bignum, which takes some more space and
+ *   slows down the function slightly.
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to multiply.
@@ -744,7 +773,8 @@ int bm_get_b( const bm_t *a, unsigned char *b, int i ) {
 int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 	int i,o,n,m;
 	const bm_t *a1,*b1;
-	uint64_t c;
+	bm_t rr;
+    uint64_t c;
 
 	/* make sure we got enough space for the result */
 
@@ -756,19 +786,23 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 		return bm_set_si(r,0);
 	}
 
+    /* set the temp bignum.. */
+
+    bm_init(&rr);
+
 	/* we will have a non-zero result */
 
-	r->sign = a->sign * b->sign;
+	rr.sign = a->sign * b->sign;
 
-	while (m > r->maxs) {
-		if ((n = bm_resize(r)) != BM_SUCCESS) {
+	while (m > rr.maxs) {
+		if ((n = bm_resize(&rr)) != BM_SUCCESS) {
 			return n;
 		}
 	}
 	
 	/* initialize the target bignum to all zeroes to ease the calculations */
 	while (--m >= 0) {
-		r->b[m] = 0;
+		rr.b[m] = 0;
 	}
 	if (a->size >= b->size) {
 		a1 = a; 
@@ -786,39 +820,40 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 		}
 		for (i = 0; i < a1->size; i++) {
 			uint64_t A = a1->b[i];
-			uint64_t R = r->b[o+i];
+			uint64_t R = rr.b[o+i];
 			c = A * B + R + c;
-			r->b[o+i] = c;
+			rr.b[o+i] = c;
 			c >>= 32;
 		}
 		if (c) {
-			r->b[o+i] = c;
+			rr.b[o+i] = c;
 		}
 	}
 
-	bm_trim(r,o+i);
-	
-	return BM_SUCCESS;
+	bm_trim(&rr,o+i);
+	o = bm_set(r,&rr);
+    bm_done(&rr);
+
+    return n;
 }
 
 /**
- * \brief Bitwise logical shift left. The output and input
- *   bignums may be the same.
+ * \brief Bitwise logical shift left.  Note that the result bignum
+ *   can also be the input bignum.
  *
- * \param a A pointer to a result bignum.
- * \param a A pointer to a bignum to shift.
- * \param n Number of bits to shift (0 to 31).
+ * \param[out] r A pointer to a result bignum.
+ * \param[in] a A pointer to a bignum to shift.
+ * \param[in] n Number of bits to shift (0 to 31).
  * \return BM_SUCCESS if OK, error otherwise.
  */
 
-int bm_lsl( bm_t *r, const bm_t *a, int n ) {
+int bm_asl( bm_t *r, const bm_t *a, int n ) {
 	uint32_t c;
 	int i;
 
 	n %= 32;
-	bm_set_si(r,0);
 
-	if (a->size >= r->size) {
+	if (a->size >= r->maxs) {
 		if ((i = bm_resize(r)) != BM_SUCCESS) {
 			return i;
 		}
@@ -838,12 +873,12 @@ int bm_lsl( bm_t *r, const bm_t *a, int n ) {
 }
 
 /**
- * \brief Bitwise arithmetic shift right. The input and output bignums
- *   may overlop.
+ * \brief Bitwise arithmetic shift right. Note that the result bignum
+ *   can be the input bignum.
  *
- * \param[out] a A pointer to a result bignum.
+ * \param[out] r A pointer to a result bignum.
  * \param[in] a A pointer to a bignum to shift.
- * \param n Number of bits to shift (0 to 31).
+ * \param[in] n Number of bits to shift (0 to 31).
  * \return BM_SUCCESS if OK, error otherwise.
  */
 
@@ -852,7 +887,7 @@ int bm_asr( bm_t *r, const bm_t *a, int n ) {
 	int i;
 
 	n %= 32;
-	bm_set_si(r,0);
+    c = 0;
 
 	for (i = a->size-1; i >= 0; i--) {
 		uint32_t A = a->b[i];
@@ -891,23 +926,29 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
     m = bm_cmp_nosign(n,d);
 
     if (m == 0) {
+        if ((m = bm_set_si(r,0)) != BM_SUCCESS) {
+            return m;
+        }
         m = n->sign * d->sign;
-        bm_set_si(r,0);
         return bm_set_si(q,m);
     }
     if (m < 0) {
-        bm_set_si(r,0);
-        return bm_set_si(q,0);
+        if ((m = bm_set_si(q,0)) != BM_SUCCESS) {
+            return m;
+        }
+        return bm_set(r,n);
     }
 
 	/* we will probably have a non-zero result */
 
     m = n->size - d->size + 1;
 
-	while (m > q->maxs) {
+	while (m > r->maxs) {
 		if ((i = bm_resize(r)) != BM_SUCCESS) {
             return i;
 		}
+    }
+    while (m > q->maxs) {
         if ((i = bm_resize(q)) != BM_SUCCESS) {
             return i;
         }
@@ -980,64 +1021,35 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
 
 int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
 	int n,i;
-	bm_t base, exp, tmp, nil;
+	bm_t nil, exp, bas, tmp;
 
-	if ((n = bm_init(&base)) != BM_SUCCESS) {
-		return n;
-	}
-	if ((n = bm_init(&exp)) != BM_SUCCESS) {
-		bm_done(&base);
-		return n;
-	}
-	if ((n = bm_init(&tmp)) != BM_SUCCESS) {
-		bm_done(&base);
-		bm_done(&exp);
-		return n;
-	}
-	if ((n = bm_init(&nil)) != BM_SUCCESS) {
-		bm_done(&base);
-		bm_done(&exp);
-		bm_done(&tmp);
-		return n;
-	}
-	if (bm_set(&exp,e) != BM_SUCCESS) {
-		bm_done(&base);
-		bm_done(&exp);
-		bm_done(&tmp);
-		bm_done(&nil);
-		return n;
-	}
-	if (bm_set(&base,b) != BM_SUCCESS) {
-		bm_done(&base);
-		bm_done(&exp);
-		bm_done(&tmp);
-		bm_done(&nil);
-		return n;
-	}
-	bm_set_ui(r,1);
+    bm_init(&nil); bm_init(&exp); bm_init(&bas); bm_init(&tmp);
 
-	while (!bm_is_zero(&exp)) {
-		/* A short cut.. one should not do peeking like this.. */
-		if (exp.b[0] & 1) {
-			/* exponent mod 2 == 1 */
-			bm_mul(&tmp,r,&base);
-			bm_div(&nil,r,&tmp,m);
-		}
-		/* exponent := exponent >> 1 */
-		bm_asr(&exp,&exp,1);
-		/* */
-		bm_set(&nil,&base);
-		bm_mul(&tmp,&nil,&nil);
-		bm_div(&nil,&base,&tmp,m);
-	}
+    if ((n = bm_set_ui(r,1)) != BM_SUCCESS) {
+        goto powm_err;
+    }
+    if ((n = bm_set(&bas,b)) != BM_SUCCESS) {
+        goto powm_err;
+    }
+    if ((n = bm_set(&exp,e)) != BM_SUCCESS) {
+        goto powm_err;
+    }
+    while (!bm_is_zero(&exp)) {
+        if (exp.b[0] & 1) {
+            bm_mul(r,r,&bas);
+            bm_set(&tmp,r);
+            bm_div(&nil,r,&tmp,m);
+        }
+        bm_asr(&exp,&exp,1);
+        bm_mul(&bas,&bas,&bas);
+        bm_set(&tmp,&bas);
+        bm_div(&nil,&bas,&tmp,m);
+    }
 
+    n = BM_SUCCESS;
 powm_err:
-	bm_done(&base);
-	bm_done(&exp);
-	bm_done(&tmp);
-	bm_done(&nil);
-
-	return BM_SUCCESS;
+    bm_done(&nil); bm_done(&exp); bm_done(&bas); bm_done(&tmp);
+	return n;
 }
 
 
@@ -1084,6 +1096,14 @@ int main( int argc, char **argv) {
 	bm_init(&b);
 	bm_init(&c);
 	bm_init(&d);
+
+    bm_set_ui(&a,4);
+    bm_set_ui(&b,13);
+    bm_set_ui(&c,497);
+    bm_powm(&r,&a,&b,&c);
+    output("bm_powm() result: ",&r);
+
+
 
 
 	bm_set_si(&nom,66778811);
