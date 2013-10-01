@@ -60,6 +60,32 @@ static void bm_trim( bm_t *r, int n ) {
 	r->size = n;
 }
 
+/**
+ * \brief Set bignum size.
+ *
+ *
+ */
+
+static int bm_set_size( bm_t *a, int s ) {
+    int n;
+
+#if !defined(BM_STATIC_ALLOC)
+    while (s > a->maxs) {
+        if ((n = bm_resize(a)) != BM_SUCCESS) {
+            return n;
+        }
+    }
+#else
+    if (a->maxs > 0 && s > a->maxs) {
+        return -BM_ERROR_NUMBER_TOO_BIG;
+    } else {
+        a->maxs = BM_MAX_SIZE;
+    }
+#endif
+    a->size = s;
+    return BM_SUCCESS;
+}
+
 
 /**
  * \brief Resize i.e. grow the internal buffer to hold the
@@ -72,7 +98,11 @@ static void bm_trim( bm_t *r, int n ) {
 
 static int bm_resize( bm_t *r ) {
 #if defined(BM_STATIC_ALLOC)
-	return -BM_ERROR_NUMBER_TOO_BIG;
+	if (r->maxs == 0) {
+        r->maxs = BM_MAX_SIZE;
+    } else {    
+        return -BM_ERROR_NUMBER_TOO_BIG;
+    }
 #else
 	if ((r->b = realloc(r->b,BM_RESIZE(r->maxs))) == NULL) {
 		return -BM_ERROR_ALLOC_FAILED;
@@ -91,19 +121,13 @@ static int bm_resize( bm_t *r ) {
  * \return BM_SUCCESS if OK.
  */
 
-int bm_init( bm_t *m ) {
-    m->size = 1;
-    m->sign = BM_POS;
-    m->maxs = BM_MAX_SIZE;
+void bm_init( bm_t *m ) {
+    m->size = 0;
+    m->sign = BM_NAN;
+    m->maxs = 0;
 #if !defined(BM_STATIC_ALLOC)
-    m->b = malloc(BM_MAX_SIZE*sizeof(uint32_t));
-
-    if (m == NULL) {
-        return -BM_ERROR_ALLOC_FAILED;
-    }
+    m->b = NULL;
 #endif
-	m->b[0] = 0;
-    return BM_SUCCESS;
 }
 
 
@@ -120,10 +144,10 @@ void bm_done( bm_t *m ) {
     if (m->b) {
         free(m->b);
         m->b = NULL;
-        m->maxs = 0;
     }
 #endif
     m->size = 0;
+    m->maxs = 0;
 }
 
 /**
@@ -463,8 +487,11 @@ int bm_sub( bm_t *r, const bm_t *a, const bm_t *b ) {
  */
 
 int bm_set_si( bm_t *r, int32_t l ) {
-    r->size = 1;
+    int n;
 
+    if ((n = bm_set_size(r,1)) != BM_SUCCESS) {
+        return n;
+    }
     if (l >= 0) {
         r->b[0] = (uint32_t)l;
         r->sign = BM_POS;
@@ -486,15 +513,20 @@ int bm_set_si( bm_t *r, int32_t l ) {
  */
 
 int bm_set_ui( bm_t *r, uint32_t l ) {
-    r->size = 1;
+    int n;
+
+    if ((n = bm_set_size(r,1)) != BM_SUCCESS) {
+        return n;
+    }
+    
     r->sign = BM_POS;
     r->b[0] = l;
-
     return BM_SUCCESS;
 }
 
 /**
- * \brief Set a bignumber value from an array of octets.
+ * \brief Set a bignumber value from an array of octets. The bignum is
+ *   implicitly set to positive value.
  *
  * \param r A pointer to a bignumber structure.
  * \param b A pointer to an octet array.
@@ -540,6 +572,7 @@ int bm_set_b( bm_t *r, const unsigned char *b, int i ) {
 	}
 
 	r->size = m;
+    r->sign = BM_POS;
     return BM_SUCCESS;
 }
 
@@ -775,7 +808,6 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 	}
 
 	bm_trim(r,o+i);
-	
 	return BM_SUCCESS;
 }
 
@@ -868,12 +900,16 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
     m = bm_cmp_nosign(n,d);
 
     if (m == 0) {
+        if ((m = bm_set_si(r,0)) != BM_SUCCESS) {
+            return m;
+        }
         m = n->sign * d->sign;
-        bm_set_si(r,0);
         return bm_set_si(q,m);
     }
     if (m < 0) {
-        bm_set_si(r,0);
+        if ((m = bm_set_si(r,0)) != BM_SUCCESS) {
+            return m;
+        }
         return bm_set_si(q,0);
     }
 
@@ -881,10 +917,12 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
 
     m = n->size - d->size + 1;
 
-	while (m > q->maxs) {
+	while (m > r->maxs) {
 		if ((i = bm_resize(r)) != BM_SUCCESS) {
             return i;
 		}
+    }
+    while (m > q->maxs) {
         if ((i = bm_resize(q)) != BM_SUCCESS) {
             return i;
         }
@@ -958,30 +996,6 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
 int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
 	int n,i;
 	bm_t bt, et;
-
-	if ((n = bm_init(&bt)) != BM_SUCCESS) {
-		return n;
-	}
-	if ((n = bm_init(&et)) != BM_SUCCESS) {
-		bm_done(&bt);
-		return n;
-	}
-	if (bm_set(bt,b) != BM_SUCCESS) {
-		bm_done(&bt);
-		bm_done(&et);
-		return n;
-	}
-	if (bm_set(et,e) != BM_SUCCESS) {
-		bm_done(&bt);
-		bm_done(&et);
-		return n;
-	}
-
-	bm_set_ui(r,0);
-
-	while (0) {
-	}
-
 
 
 

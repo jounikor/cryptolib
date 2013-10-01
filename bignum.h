@@ -45,6 +45,7 @@
 
 #define BM_POS 1
 #define BM_NEG -1
+#define BM_NAN 0
 
 /**
  * \struct bm_s bignum.h bignum.h
@@ -74,7 +75,7 @@ typedef bm_t * bmp_t;
  *
  */
 
-int bm_init( bm_t * );
+void bm_init( bm_t * );
 void bm_done( bm_t * );
 int bm_add( bm_t *, const bm_t *, const bm_t * );
 int bm_add_ui( bm_t *, uint32_t );
