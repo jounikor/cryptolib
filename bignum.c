@@ -589,15 +589,9 @@ int bm_set( bm_t *d, const bm_t *a ) {
 	int n;
 	
 	if (a->maxs > d->maxs) {
-		/* resize.. */
-#if defined(BM_STATIC_ALLOC)
-		return -BM_ERROR_NUMBER_TOO_BIG;
-#else
-		if ((d->b = realloc(d->b,a->maxs)) == NULL) {
-			return -BM_ERROR_ALLOC_FAILED;
-		}
-		d->maxs = a->maxs;
-#endif
+	    if ((n = bm_set_size(d,a->maxs)) != BM_SUCCESS) {
+            return n;
+        }
 	}
 
 	d->size = a->size;
@@ -871,7 +865,7 @@ int bm_asr( bm_t *r, const bm_t *a, int n ) {
 	int i;
 
 	n %= 32;
-	bm_set_si(r,0);
+    c = 0;
 
 	for (i = a->size-1; i >= 0; i--) {
 		uint32_t A = a->b[i];
@@ -918,10 +912,10 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
         return bm_set_si(q,m);
     }
     if (m < 0) {
-        if ((m = bm_set_si(r,0)) != BM_SUCCESS) {
+        if ((m = bm_set_si(q,0)) != BM_SUCCESS) {
             return m;
         }
-        return bm_set_si(q,0);
+        return bm_set(r,n);
     }
 
 	/* we will probably have a non-zero result */
@@ -1006,11 +1000,35 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
 
 int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
 	int n,i;
-	bm_t bt, et;
+	bm_t nil, exp, bas, tmp;
 
+    bm_init(&nil); bm_init(&exp); bm_init(&bas); bm_init(&tmp);
 
+    if ((n = bm_set_ui(r,1)) != BM_SUCCESS) {
+        goto powm_err;
+    }
+    if ((n = bm_set(&bas,b)) != BM_SUCCESS) {
+        goto powm_err;
+    }
+    if ((n = bm_set(&exp,e)) != BM_SUCCESS) {
+        goto powm_err;
+    }
+    while (!bm_is_zero(&exp)) {
+        if (exp.b[0] & 1) {
+            bm_mul(r,r,&bas);
+            bm_set(&tmp,r);
+            bm_div(&nil,r,&tmp,m);
+        }
+        bm_asr(&exp,&exp,1);
+        bm_mul(&bas,&bas,&bas);
+        bm_set(&tmp,&bas);
+        bm_div(&nil,&bas,&tmp,m);
+    }
 
-	return BM_SUCCESS;
+    n = BM_SUCCESS;
+powm_err:
+    bm_done(&nil); bm_done(&exp); bm_done(&bas); bm_done(&tmp);
+	return n;
 }
 
 
@@ -1057,6 +1075,14 @@ int main( int argc, char **argv) {
 	bm_init(&b);
 	bm_init(&c);
 	bm_init(&d);
+
+    bm_set_ui(&a,4);
+    bm_set_ui(&b,13);
+    bm_set_ui(&c,497);
+    bm_powm(&r,&a,&b,&c);
+    output("bm_powm() result: ",&r);
+
+
 
 
 	bm_set_si(&nom,66778811);
