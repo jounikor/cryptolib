@@ -291,6 +291,28 @@ int bm_cmp( const bm_t *a, const bm_t *b ) {
 	return a->sign * bm_cmp_nosign(a,b);
 }
 
+/**
+ * \brief Compare an unsigned interget against a bignum.
+ * \param[in] a A pointer to a bignum.
+ * \param[in] v An unsigned integer to compare against.
+ *
+ * \return 0 if equal, >0 if a > b, and <0 otherwise.
+ */
+
+int bm_cmp_ui( const bm_t *a, uint32_t v ) {
+	if (a->size > 1) {
+		return 1;
+	}
+	if (a->b[0] == v) {
+		return 0;
+	}
+	if (a->b[0] > v) {
+		return 1;
+	} else {
+		return -1;
+	}
+}
+
 
 /**
  * \brief Add (signed) two bignumers. Note that the output bignumber
@@ -780,7 +802,8 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 }
 
 /**
- * \brief Bitwise logical shift left.
+ * \brief Bitwise logical shift left. The output and input
+ *   bignums may be the same.
  *
  * \param a A pointer to a result bignum.
  * \param a A pointer to a bignum to shift.
@@ -815,10 +838,11 @@ int bm_lsl( bm_t *r, const bm_t *a, int n ) {
 }
 
 /**
- * \brief Bitwise arithmetic shift right.
+ * \brief Bitwise arithmetic shift right. The input and output bignums
+ *   may overlop.
  *
- * \param a A pointer to a result bignum.
- * \param a A pointer to a bignum to shift.
+ * \param[out] a A pointer to a result bignum.
+ * \param[in] a A pointer to a bignum to shift.
  * \param n Number of bits to shift (0 to 31).
  * \return BM_SUCCESS if OK, error otherwise.
  */
@@ -857,7 +881,6 @@ int bm_asr( bm_t *r, const bm_t *a, int n ) {
 
 int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
 	int i,o,m;
-    bm_t t;
 
 	/* check for pathetic cases */
 
@@ -957,33 +980,62 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
 
 int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
 	int n,i;
-	bm_t bt, et;
+	bm_t base, exp, tmp, nil;
 
-	if ((n = bm_init(&bt)) != BM_SUCCESS) {
+	if ((n = bm_init(&base)) != BM_SUCCESS) {
 		return n;
 	}
-	if ((n = bm_init(&et)) != BM_SUCCESS) {
-		bm_done(&bt);
+	if ((n = bm_init(&exp)) != BM_SUCCESS) {
+		bm_done(&base);
 		return n;
 	}
-	if (bm_set(bt,b) != BM_SUCCESS) {
-		bm_done(&bt);
-		bm_done(&et);
+	if ((n = bm_init(&tmp)) != BM_SUCCESS) {
+		bm_done(&base);
+		bm_done(&exp);
 		return n;
 	}
-	if (bm_set(et,e) != BM_SUCCESS) {
-		bm_done(&bt);
-		bm_done(&et);
+	if ((n = bm_init(&nil)) != BM_SUCCESS) {
+		bm_done(&base);
+		bm_done(&exp);
+		bm_done(&tmp);
 		return n;
 	}
+	if (bm_set(&exp,e) != BM_SUCCESS) {
+		bm_done(&base);
+		bm_done(&exp);
+		bm_done(&tmp);
+		bm_done(&nil);
+		return n;
+	}
+	if (bm_set(&base,b) != BM_SUCCESS) {
+		bm_done(&base);
+		bm_done(&exp);
+		bm_done(&tmp);
+		bm_done(&nil);
+		return n;
+	}
+	bm_set_ui(r,1);
 
-	bm_set_ui(r,0);
-
-	while (0) {
+	while (!bm_is_zero(&exp)) {
+		/* A short cut.. one should not do peeking like this.. */
+		if (exp.b[0] & 1) {
+			/* exponent mod 2 == 1 */
+			bm_mul(&tmp,r,&base);
+			bm_div(&nil,r,&tmp,m);
+		}
+		/* exponent := exponent >> 1 */
+		bm_asr(&exp,&exp,1);
+		/* */
+		bm_set(&nil,&base);
+		bm_mul(&tmp,&nil,&nil);
+		bm_div(&nil,&base,&tmp,m);
 	}
 
-
-
+powm_err:
+	bm_done(&base);
+	bm_done(&exp);
+	bm_done(&tmp);
+	bm_done(&nil);
 
 	return BM_SUCCESS;
 }
