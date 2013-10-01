@@ -86,7 +86,7 @@ int bm_cmp( const bm_t *, const bm_t * );
 int bm_mul( bm_t *, const bm_t *, const bm_t * );
 int bm_div( bm_t *, bm_t *, const bm_t *, const bm_t * );
 int bm_powm( bm_t *, const bm_t *, const bm_t *, const bm_t * );
-int bm_lsl( bm_t *, const bm_t *, int );
+int bm_asl( bm_t *, const bm_t *, int );
 int bm_asr( bm_t *, const bm_t *, int );
 
 int bm_set_si( bm_t *, int32_t );

@@ -317,9 +317,8 @@ int bm_cmp( const bm_t *a, const bm_t *b ) {
 
 
 /**
- * \brief Add (signed) two bignumers. Note that the output bignumber
- *   must not be any of the input bignumbers. The output bignum is
- *   also "reset" every time.
+ * \brief Add (signed) two bignumers. Note that the result bignum
+ *   can be one of the input bignums.
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to add.
@@ -393,7 +392,7 @@ int bm_add_ui( bm_t * a, uint32_t v ) {
 }
 
 /**
- * \brief Add a signed integer to a bignum.
+ * \brief Add a signed integer to a bignum. 
  *
  * \param[inout] a A pointer to a destination bignum.
  * \param[in] v A signed integer to add.
@@ -434,8 +433,8 @@ int bm_add_si( bm_t * a, int32_t v ) {
 
 
 /**
- * \brief Sub (signed) two bignumers. Note that the output bignumber
- *   must not be any of the input bignumbers.
+ * \brief Sub (signed) two bignumers. Note that the result 
+ *   bignum may be one of the input bignums.
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to add.
@@ -578,7 +577,7 @@ int bm_set_b( bm_t *r, const unsigned char *b, int i ) {
 
 
 /**
- * \brief Copies a bignum from another bignum. Note that this fucntion
+ * \brief Copies a bignum from another bignum.
  *
  * \param d A pointer to a destination bignum.
  * \param a A pointer to a source bignum.
@@ -741,7 +740,10 @@ int bm_get_b( const bm_t *a, unsigned char *b, int i ) {
 
 /**
  * \brief A signed multiplication. This can be considered an elementary school
- *   level algorithm :)
+ *   level algorithm :) Note that the result bignum can be the same as either
+ *   one of the input bignums. Also both input bignums can be the same. This is
+ *   done at the expense of a temporary bignum, which takes some more space and
+ *   slows down the function slightly.
  *
  * \param r A pointer to a result bignumber.
  * \param a A pointer to a bignumber to multiply.
@@ -755,7 +757,8 @@ int bm_get_b( const bm_t *a, unsigned char *b, int i ) {
 int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 	int i,o,n,m;
 	const bm_t *a1,*b1;
-	uint64_t c;
+	bm_t rr;
+    uint64_t c;
 
 	/* make sure we got enough space for the result */
 
@@ -767,19 +770,23 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 		return bm_set_si(r,0);
 	}
 
+    /* set the temp bignum.. */
+
+    bm_init(&rr);
+
 	/* we will have a non-zero result */
 
-	r->sign = a->sign * b->sign;
+	rr.sign = a->sign * b->sign;
 
-	while (m > r->maxs) {
-		if ((n = bm_resize(r)) != BM_SUCCESS) {
+	while (m > rr.maxs) {
+		if ((n = bm_resize(&rr)) != BM_SUCCESS) {
 			return n;
 		}
 	}
 	
 	/* initialize the target bignum to all zeroes to ease the calculations */
 	while (--m >= 0) {
-		r->b[m] = 0;
+		rr.b[m] = 0;
 	}
 	if (a->size >= b->size) {
 		a1 = a; 
@@ -797,37 +804,40 @@ int bm_mul( bm_t *r, const bm_t *a, const bm_t *b ) {
 		}
 		for (i = 0; i < a1->size; i++) {
 			uint64_t A = a1->b[i];
-			uint64_t R = r->b[o+i];
+			uint64_t R = rr.b[o+i];
 			c = A * B + R + c;
-			r->b[o+i] = c;
+			rr.b[o+i] = c;
 			c >>= 32;
 		}
 		if (c) {
-			r->b[o+i] = c;
+			rr.b[o+i] = c;
 		}
 	}
 
-	bm_trim(r,o+i);
-	return BM_SUCCESS;
+	bm_trim(&rr,o+i);
+	o = bm_set(r,&rr);
+    bm_done(&rr);
+
+    return n;
 }
 
 /**
- * \brief Bitwise logical shift left.
+ * \brief Bitwise logical shift left.  Note that the result bignum
+ *   can also be the input bignum.
  *
- * \param a A pointer to a result bignum.
- * \param a A pointer to a bignum to shift.
- * \param n Number of bits to shift (0 to 31).
+ * \param[out] r A pointer to a result bignum.
+ * \param[in] a A pointer to a bignum to shift.
+ * \param[in] n Number of bits to shift (0 to 31).
  * \return BM_SUCCESS if OK, error otherwise.
  */
 
-int bm_lsl( bm_t *r, const bm_t *a, int n ) {
+int bm_asl( bm_t *r, const bm_t *a, int n ) {
 	uint32_t c;
 	int i;
 
 	n %= 32;
-	bm_set_si(r,0);
 
-	if (a->size >= r->size) {
+	if (a->size >= r->maxs) {
 		if ((i = bm_resize(r)) != BM_SUCCESS) {
 			return i;
 		}
@@ -847,11 +857,12 @@ int bm_lsl( bm_t *r, const bm_t *a, int n ) {
 }
 
 /**
- * \brief Bitwise arithmetic shift right.
+ * \brief Bitwise arithmetic shift right. Note that the result bignum
+ *   can be the input bignum.
  *
- * \param a A pointer to a result bignum.
- * \param a A pointer to a bignum to shift.
- * \param n Number of bits to shift (0 to 31).
+ * \param[out] r A pointer to a result bignum.
+ * \param[in] a A pointer to a bignum to shift.
+ * \param[in] n Number of bits to shift (0 to 31).
  * \return BM_SUCCESS if OK, error otherwise.
  */
 
