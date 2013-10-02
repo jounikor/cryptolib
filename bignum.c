@@ -149,6 +149,8 @@ void bm_inits( bm_t *s, ... ) {
     while ((t = va_arg(va,bm_t *))) {
         bm_init(t);
     }
+
+    va_end(va);
 }
 
 
@@ -189,6 +191,8 @@ void bm_dones( bm_t *s, ... ) {
     while (t = va_arg(va,bm_t *)) {
         bm_done(t);
     }
+
+    va_end(va);
 }
 
 
