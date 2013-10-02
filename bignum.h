@@ -14,64 +14,65 @@
 
 #include <stdint.h>
 
-/**
- * \brief Defines.
- *
- */
-
-#define BM_MAX_SIZE  32	/**< max 1024 bits numbers */
-#define BM_STATIC_ALLOC	/**< undefine if dynamically allocated memory is ok */
+#define BM_MAX_SIZE  32	/**< Maximum 1024-bit numbers */
+#define BM_STATIC_ALLOC	/**< Undefine this if dynamically allocated memory is needed. */
 
 #define BM_MAX(a,b) (a) < (b) ? (b) : (a)
-#define BM_RESIZE(a) (a) + BM_MAX_SIZE  /**< resize by 1024 bits */
+#define BM_RESIZE(a) (a) + BM_MAX_SIZE  /**< Resize a bignum by 1024 bits. */
 
 /**
- * \bried Error codes that bignum functions may return.
- *
+ * \brief Error codes that bignum functions may return. In case of errors
+ *   all the functions return a negative value of the BM_ERROR_* define,
+ *   not the define itself as is.
  */
 
-#define BM_SUCCESS 0
-#define BM_ERROR_NOT_A_NUMBER 1
-#define BM_ERROR_NUMBER_TOO_BIG 2
-#define BM_ERROR_ALLOC_FAILED 3
-#define BM_ERROR_NOT_IMPLEMENTED 4
-#define BM_ERROR_DIV_BY_ZERO 5
-#define BM_ERROR_INTERNAL_ERROR 666
+#define BM_SUCCESS 0                /**< Success */
+#define BM_ERROR_NOT_A_NUMBER 1     /**< The bignum type/structure contains no number. */
+#define BM_ERROR_NUMBER_TOO_BIG 2   /**< The bignum operation overflew. This usually happens
+                                         when static memory allocation is used. */
+#define BM_ERROR_ALLOC_FAILED 3     /**< Memory allocation failed. */
+#define BM_ERROR_NOT_IMPLEMENTED 4  /**< The bignum function is not implemented. */
+#define BM_ERROR_DIV_BY_ZERO 5      /**< A division by zero. */
+#define BM_ERROR_INTERNAL_ERROR 666 /**< Internal error within the bignum implementation.
+                                         This could be because of bad input parameter or
+                                         just broken implementation. */
 
 /**
  * \brief Sign of the number..
- *
  */
 
-#define BM_POS 1
-#define BM_NEG -1
-#define BM_NAN 0
+#define BM_POS 1    /**< The bignum is positive i.e. >= 0 */
+#define BM_NEG -1   /**< The bignum is negative i.e. < 0 */
+#define BM_NAN 0    /**< The bignum contains no number. This
+                         is the initial setting for the bignum */
 
 /**
  * \struct bm_s bignum.h bignum.h
  * \brief Bignum structure definition. The bignum is represented as
  *   an array of unsigned 32-bit numbers. 
  *
- * \typedef bm_t
- * \typedef bmp_t
+ * The bignum implementation allows either static memory allocation or
+ * dynamic memory allocation. If BM_STATIC_ALLOC is defined, then static
+ * memory allocation is used. Note that statically allocated bignum cannot
+ * be rezised and an attemp to do so will always return an error.
  */
 
 typedef struct bm_s {
-    int sign;
-    int size;
-    int maxs;
+    int sign;                   /**< Either BM_POS, BM_NEG or BM_NAN */
+    int size;                   /**< The size of the current bignum in the b[] array */
+    int maxs;                   /**< The maximum size of the b[] array */
 #if defined(BM_STATIC_ALLOC)
-    uint32_t b[BM_MAX_SIZE];
+    uint32_t b[BM_MAX_SIZE];    /**< The bignum array for static memory usage */
 #else
-    uint32_t *b;
+    uint32_t *b;                /**< The bignum array for dynamic memory usage */
 #endif
 } bm_t;
 
-typedef bm_t * bmp_t;
+typedef bm_t * bmp_t;           /**< A pointer to the bignum type */
 
 /**
- * \brief function prototypes..
- *
+ * \brief Function prototypes implemented by the bignum.c and
+ *   also exported outside the bignum.c.
  *
  */
 
