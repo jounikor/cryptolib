@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#include <stdarg.h>
 
 #include "bignum.h"
 
@@ -130,6 +131,26 @@ void bm_init( bm_t *m ) {
 #endif
 }
 
+/**
+ * \brief Initialize a number of bignums at once. This bignums are
+ *   given to the function as a NULL terminated list of varargs.
+ *
+ * \param ... A NULL ternimated list of bignums to initialize.
+ * \return Nothing.
+ */
+
+void bm_inits( bm_t *s, ... ) {
+    va_list va;
+    bm_t *t;
+
+    bm_init(s);
+    va_start(va,s);
+
+    while ((t = va_arg(va,bm_t *))) {
+        bm_init(t);
+    }
+}
+
 
 
 /**
@@ -149,6 +170,28 @@ void bm_done( bm_t *m ) {
     m->size = 0;
     m->maxs = 0;
 }
+
+/**
+ * \brief Free the memory reserved for a NULL terminated array of bignums.
+ *
+ * \param[in] s A pointer to the first bignum.
+ * \param[in] ... A list of varargs
+ * \return Nothing.
+ */
+
+void bm_dones( bm_t *s, ... ) {
+    va_list va;
+    bm_t *t;
+
+    bm_done(s);
+    va_start(va,s);
+
+    while (t = va_arg(va,bm_t *)) {
+        bm_done(t);
+    }
+}
+
+
 
 /**
  * \brief Sub two bignumers and neglect the sign. Note that the output
@@ -1089,13 +1132,19 @@ int main( int argc, char **argv) {
 	bm_t r,a,b,c,d;
 	bm_t nom,den,rem,quo;
 
-	bm_init(&nom); bm_init(&den); bm_init(&rem); bm_init(&quo);
 
+#if 0
+	bm_init(&nom); bm_init(&den); bm_init(&rem); bm_init(&quo);
 	bm_init(&r);
 	bm_init(&a);
 	bm_init(&b);
 	bm_init(&c);
 	bm_init(&d);
+#else
+	bm_inits(&nom,&den,&rem,&quo,NULL);
+    bm_inits(&r,&a,&b,&c,&d,NULL);
+#endif
+
 
     bm_set_ui(&a,4);
     bm_set_ui(&b,13);
@@ -1166,13 +1215,17 @@ int main( int argc, char **argv) {
 	bm_mul(&r,&c,&d);
 	output("**bm_mul()",&r);
 
+#if 0
 	bm_done(&nom); bm_done(&den); bm_done(&rem); bm_done(&quo);
-
 	bm_done(&r);
 	bm_done(&a);
 	bm_done(&b);
 	bm_done(&c);
 	bm_done(&d);
+#else
+	bm_dones(&nom,&den,&rem,&quo,NULL);
+    bm_dones(&r,&a,&b,&c,&d,NULL);
+#endif
 
     return 0;
 }

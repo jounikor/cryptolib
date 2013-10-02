@@ -77,7 +77,9 @@ typedef bm_t * bmp_t;           /**< A pointer to the bignum type */
  */
 
 void bm_init( bm_t * );
+void bm_inits( bm_t *, ... );
 void bm_done( bm_t * );
+void bm_dones( bm_t *, ... );
 int bm_add( bm_t *, const bm_t *, const bm_t * );
 int bm_add_ui( bm_t *, uint32_t );
 int bm_add_si( bm_t *, int32_t );
