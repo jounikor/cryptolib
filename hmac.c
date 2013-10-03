@@ -121,6 +121,7 @@ static void hmac_update( crypto_context *ctx, const void *buf, int len ) {
 				keylen = va_arg(tags,int);
 				break;
 			default:
+				va_end(tags);
 				return CRYPTO_ERROR_UNSUPPORTED_TAG;
 		}
 	}
