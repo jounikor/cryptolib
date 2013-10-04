@@ -259,6 +259,9 @@ crypto_context *hmac_init( hmac_context *htx, crypto_context *dtx ) {
 	return ctx;
 }
 
+
+#if !defined(PARTOFLIBRARY)
+
 /*
  * test_case =     1
  * key =           0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b
@@ -269,7 +272,6 @@ crypto_context *hmac_init( hmac_context *htx, crypto_context *dtx ) {
  */
 
 
-#if 1
 int main( int argc, char** argv ) {
 	uint8_t key[] = {	0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b,
 						0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b	};

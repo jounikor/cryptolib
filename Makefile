@@ -10,11 +10,12 @@
 	make all
 #
 
-SRCS = hmac.c sha1.c bignum.c
+SRCS = hmac.c sha1.c bignum.c uuid.c
 
 OBJS := $(patsubst %.c,%.o,$(SRCS))
 
-HDRS = hmac.h sha1.h algorithm_types.h crypto_error.h bignum.h
+HDRS = hmac.h sha1.h algorithm_types.h crypto_error.h bignum.h \
+       uuid.h
 
 #
 
