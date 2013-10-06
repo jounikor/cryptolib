@@ -48,15 +48,9 @@ typedef union uuid_u {
     struct uuid_s {
         uint32_t time_low;
 	    uint16_t time_mid;
-	    union {
-            uint16_t time_hi;
-            uint8_t version;
-        } M;
-	    union {
-            uint8_t clock_seq_hi;
-            uint8_t variant;
-        } N;
-	    uint8_t clock_seq_low;
+        uint16_t time_hi_ver;       /* and version */
+        uint8_t clock_seq_hi_var;   /* and variant */
+	    uint8_t clock_seq_lo;
 	    uint8_t node[6];
     } uuid;
     uint8_t uuid_a[16];
@@ -69,8 +63,11 @@ typedef union uuid_u {
 #define UUID_VARIANT_INDEX 8
 #define UUID_VERSION_INDEX 6
 
+#define UUID_ATOMIC_INC(x) (x)++
 
 
+
+void uuid_seq_init( void );
 int uuid_get_version_b( const void * );
 int uuid_get_variant_b( const void * );
 int uuid_get_version( const uuid_t * );

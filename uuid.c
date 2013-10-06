@@ -55,12 +55,13 @@ static void swap_endianess( uuid_t *u ) {
 
     u->uuid.time_low = swap32u(u->uuid.time_low);
     u->uuid.time_mid = swap16u(u->uuid.time_mid);
-    u->uuid.M.time_hi = swap16u(u->uuid.M.time_hi);
+    u->uuid.time_hi_ver = swap16u(u->uuid.time_hi_ver);
 }
 
 
 /**
- * \brief UUID version 2 of variation 10..
+ * \brief UUID version 2 of variation '0b10x' (DCE Security). This version
+ *   of UUID is not supported.
  * \param[out] u A pointer to UUID to store the output.
  * \param[in] uid The UID.
  * \param[in] gid The GID.
@@ -89,20 +90,53 @@ static void fill_v3v5( uuid_t *u, const void *h, int v ) {
     /* fix version and variant */
     uu = (uint8_t *)u;
     x = uu[UUID_VERSION_INDEX];
-    x = x & 0x0f | v << 4;
+    x = x & 0x0f | (v & 0x0f) << 4;
     uu[UUID_VERSION_INDEX] = x;
 
     x = uu[UUID_VARIANT_INDEX];
-    x = x & 0x3f | 0x80;    /* only variany '10x' supported */
+    x = x & 0x3f | 0x80;    /* only variany '0b10x' supported */
     uu[UUID_VARIANT_INDEX] = x;
+}
 
+/**
+ * \brief UUID version 1 of variation '0b10x' (MAC address).
+ * \param[out] u A pointer to a UUID to construct.
+ * \param[in] tv A pointer to a timeval (time since January 1, 1970).
+ * \param[in] mac A pointer to a MAC address (48 bits).
+ * \return UUID_SUCCESS if ok. Negative error code if something failed.
+ */
 
+int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac ) {
+    uint64_t t;
+
+    /* UUID base time is 100-nanosecond intervals since the adoption
+     * of the Gregorian calendar in the West, i.e. October 15, 1582.
+     * Convert that to the UNIX base time, i.e. January 1, 1970.
+     */
+
+    t = (uint64_t)(10 * tv->tv_usec);       /* 1 usec = 10 * 100 nanosec */
+    t += (uint64_t)(10000000 * tv->tv_sec); /* 1 sec = 10^7 * 100 nanosec */
+    t += 0x01B21DD213814000ULL;             /* 100 nanosecs since October 15, 1582 */
+
+    /* The MAC address is assumed to be 48 bits */
+    memcpy(u->uuid.node,mac,6);
+
+    u->uuid.time_low = t;       /* Implicitly take the lowest 32 bits */
+    u->uuid.time_mid = t >> 32; /* Implicitly take the mid 16 bits */
+    u->uuid.time_hi_ver = t >> 48 & 0x0fff | 0x1000;    /* version 1 UUID */
+    u->uuid.clock_seq_hi_var = 0;
+    u->uuid.clock_seq_lo = 0;
+
+    /* fix version and variant */
+
+    return UUID_SUCCESS;
 }
 
 
 
 /**
- * \brief UUID version 3 of variation 10..
+ * \brief UUID version 3 of variation '0b10x' (MD5 hash). This version
+ *   of the UUID is not supported.
  * \param[out] u A pointer to UUID to store the output.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
@@ -115,7 +149,7 @@ int uuid_create_v3(uuid_t *u, const void *n, int l ) {
 }
 
 /**
- * \brief UUID version 5 of variation 10..
+ * \brief UUID version 5 of variation '0b10x' (SAH-1 hash).
  * \param[out] u A pointer to UUID to store the output.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
@@ -138,7 +172,7 @@ int uuid_create_v5(uuid_t *u, const void *n, int l ) {
     fill_v3v5( u, hsh, sizeof(uuid_t) );
 
     /* Shuffle the structure into host byte order.. We should use proper
-     * libraries of project wide defines for this purpose but we are
+     * libraries or project wide defines for this purpose but we are
      * not.. lame..
      */
     
@@ -184,7 +218,7 @@ void uuid_unpack( uuid_t *u, const void *i ) {
  */
 
 int uuid_get_version( const uuid_t *u ) {
-    return (int)(u->uuid.M.version & 0xf0) >> 4;
+    return (int)(u->uuid.time_hi_ver >> 12);
 }
 
 /**
@@ -195,7 +229,7 @@ int uuid_get_version( const uuid_t *u ) {
  */
 
 int uuid_get_variant( const uuid_t *u ) {
-    return (int)(u->uuid.N.variant & 0xf0) >> 4;
+    return (int)(u->uuid.clock_seq_hi_var >> 5);
 }
 
 /**
