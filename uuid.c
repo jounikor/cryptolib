@@ -149,7 +149,7 @@ int uuid_create_v3(uuid_t *u, const void *n, int l ) {
 }
 
 /**
- * \brief UUID version 5 of variation '0b10x' (SAH-1 hash).
+ * \brief UUID version 5 of variation '0b10x' (SHA-1 hash).
  * \param[out] u A pointer to UUID to store the output.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
@@ -167,9 +167,9 @@ int uuid_create_v5(uuid_t *u, const void *n, int l ) {
     ctx->finish(ctx,hsh);
     ctx->free(ctx);
     
-    /* Use only 128 first bits out of the SHA-1 hash */
+    /* Use only 128 first bits out of the SHA-1 hash and versio 5*/
    
-    fill_v3v5( u, hsh, sizeof(uuid_t) );
+    fill_v3v5( u, hsh, 5 );
 
     /* Shuffle the structure into host byte order.. We should use proper
      * libraries or project wide defines for this purpose but we are
