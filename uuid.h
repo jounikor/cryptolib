@@ -63,11 +63,12 @@ typedef union uuid_u {
 #define UUID_VARIANT_INDEX 8
 #define UUID_VERSION_INDEX 6
 
-#define UUID_ATOMIC_INC(x) (x)++
+/*
+ *
+ */
 
-
-
-void uuid_seq_init( void );
+void uuid_init_seq( int );
+uint16_t uuid_get_seq( void );
 int uuid_get_version_b( const void * );
 int uuid_get_variant_b( const void * );
 int uuid_get_version( const uuid_t * );
@@ -82,10 +83,6 @@ int uuid_create_v3( uuid_t *, const void *, int );  /* URL based */
 int uuid_create_v4( uuid_t *, long );    /* random number based */
 int uuid_create_v5( uuid_t *, const void *, int );  /* 
 
-
-
-
-
 /**
  * \brief Error codes for UUID handling.
  *
@@ -96,9 +93,6 @@ int uuid_create_v5( uuid_t *, const void *, int );  /*
 #define UUID_ERROR_NOT_SUPPORTED_VARIANT    1
 #define UUID_ERROR_NOT_SUPPORTED_VERSION    2
 #define UUID_ERROR_NO_MEMORY                3
-
-
-
 
 
 #endif /* _uuid_h_included */

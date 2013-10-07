@@ -18,6 +18,7 @@
 
 #include "uuid.h"
 #include "sha1.h"
+#include "synchronization.h"
 
 /**
  * \brief Test endianess whether we are using little endian.
@@ -58,6 +59,33 @@ static void swap_endianess( uuid_t *u ) {
     u->uuid.time_hi_ver = swap16u(u->uuid.time_hi_ver);
 }
 
+static uint16_t clock_seq;
+
+
+/**
+ * \brief Initialized teh clock sequence numbering to be used with the UUID
+ *   Version 1 Variant '0b10x'.
+ * \param[in] seed A seed for the "bad random number" generator.
+ * \returb Nothing.
+ */
+
+void uuid_seq_init( int seed ) {
+	/* This is something bad.. */
+	clock_seq = 0xcafe;
+}
+
+/**
+ * \brief Get the current clock sequence and increase the internal
+ *   clock sequence counter.
+ * \return The current clock sequence value.
+ *
+ */
+
+uint16_t uuid_get_seq( void ) {
+	uint16_t t = clock_seq;
+	ATOMIC_OPERATION(++clock_seq);
+	return t;
+}
 
 /**
  * \brief UUID version 2 of variation '0b10x' (DCE Security). This version
@@ -108,6 +136,7 @@ static void fill_v3v5( uuid_t *u, const void *h, int v ) {
 
 int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac ) {
     uint64_t t;
+	uint16_t s = uuid_get_seq();
 
     /* UUID base time is 100-nanosecond intervals since the adoption
      * of the Gregorian calendar in the West, i.e. October 15, 1582.
@@ -121,13 +150,13 @@ int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac
     /* The MAC address is assumed to be 48 bits */
     memcpy(u->uuid.node,mac,6);
 
-    u->uuid.time_low = t;       /* Implicitly take the lowest 32 bits */
+    /* fix version and variant */
+    
+	u->uuid.time_low = t;       /* Implicitly take the lowest 32 bits */
     u->uuid.time_mid = t >> 32; /* Implicitly take the mid 16 bits */
     u->uuid.time_hi_ver = t >> 48 & 0x0fff | 0x1000;    /* version 1 UUID */
-    u->uuid.clock_seq_hi_var = 0;
-    u->uuid.clock_seq_lo = 0;
-
-    /* fix version and variant */
+    u->uuid.clock_seq_hi_var = s >> 8 & 0x3f | 0x80;	/* variant '0b10x' */
+    u->uuid.clock_seq_lo = s;
 
     return UUID_SUCCESS;
 }
@@ -147,6 +176,21 @@ int uuid_create_v3(uuid_t *u, const void *n, int l ) {
     /* We do not support MD5, that's the reason.. */
     return UUID_ERROR_NOT_SUPPORTED_VERSION;
 }
+
+/**
+ * \brief Create a UUID cversion 4 variation '0b10x' (Random).
+ * 
+ *
+ *
+ */
+
+int uuid_create_v4( uuid_t *u, long seed ) {
+
+
+	return UUID_SUCCESS;
+}
+
+
 
 /**
  * \brief UUID version 5 of variation '0b10x' (SHA-1 hash).
@@ -281,11 +325,43 @@ int uuid_is_zero( const uuid_t *u ) {
 //#if !defined(PARTOFLIBRARY)
 
 void print_uuid( const uuid_t *u ) {
+	int n,m;
+
+	uint8_t b[16];
+	uuid_serialize(b,u);
+
+	printf("UUID version %d, variant %#x\n\t ",
+		(b[UUID_VERSION_INDEX] & 0xf0) >> 4,
+		(b[UUID_VARIANT_INDEX] & 0xe0) >> 5);
+	for (n = 0; n < 4; n++) {
+		printf("%02x",b[n]);
+	}
+	printf("-");
+	for (n = 0; n < 2; n++) {
+		printf("%02x",b[4+n]);
+	}
+	printf("-");
+	for (n = 0; n < 2; n++) {
+		printf("%02x",b[6+n]);
+	}
+	printf("-");
+	for (n = 0; n < 2; n++) {
+		printf("%02x",b[8+n]);
+	}
+	printf("-");
+	for (n = 0; n < 6; n++) {
+		printf("%02x",b[12+n]);
+	}
 }
 
 
 
 int main( int argc, char **argv ) {
+
+	uuid_t u1;
+
+	//uuid_create_v5();
+
 
 
 

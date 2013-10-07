@@ -1066,13 +1066,13 @@ int bm_div( bm_t *q, bm_t *r, const bm_t *n, const bm_t *d ) {
  *
  */
 
-int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
-	int n,i;
+int bm_powm( bm_t *res, const bm_t *b, const bm_t *e, const bm_t *m ) {
+	int n;
 	bm_t nil, exp, bas, tmp;
+    
+	bm_inits(&nil,&exp,&bas,&tmp,NULL);
 
-    bm_init(&nil); bm_init(&exp); bm_init(&bas); bm_init(&tmp);
-
-    if ((n = bm_set_ui(r,1)) != BM_SUCCESS) {
+    if ((n = bm_set_ui(res,1)) != BM_SUCCESS) {
         goto powm_err;
     }
     if ((n = bm_set(&bas,b)) != BM_SUCCESS) {
@@ -1082,20 +1082,23 @@ int bm_powm( bm_t *r, const bm_t *b, const bm_t *e, const bm_t *m ) {
         goto powm_err;
     }
     while (!bm_is_zero(&exp)) {
+		/* I know that the onlining is bad but for _my_ readability sake and
+		 * in an attempt to avoid macros..
+		 */
         if (exp.b[0] & 1) {
-            bm_mul(r,r,&bas);
-            bm_set(&tmp,r);
-            bm_div(&nil,r,&tmp,m);
+            if ((n = bm_mul(res,res,&bas)) != BM_SUCCESS) { goto powm_err; }
+            if ((n = bm_set(&tmp,res)) != BM_SUCCESS) { goto powm_err; }
+            if ((n = bm_div(&nil,res,&tmp,m)) != BM_SUCCESS) { goto powm_err; }
         }
-        bm_asr(&exp,&exp,1);
-        bm_mul(&bas,&bas,&bas);
-        bm_set(&tmp,&bas);
-        bm_div(&nil,&bas,&tmp,m);
+        if ((n = bm_asr(&exp,&exp,1)) != BM_SUCCESS) { goto powm_err; }
+        if ((n = bm_mul(&bas,&bas,&bas)) != BM_SUCCESS) { goto powm_err; }
+        if ((n = bm_set(&tmp,&bas)) != BM_SUCCESS) { goto powm_err; }
+        if ((n = bm_div(&nil,&bas,&tmp,m)) != BM_SUCCESS) { goto powm_err; }
     }
 
     n = BM_SUCCESS;
 powm_err:
-    bm_done(&nil); bm_done(&exp); bm_done(&bas); bm_done(&tmp);
+    bm_dones(&nil,&exp,&bas,&tmp,NULL);
 	return n;
 }
 
