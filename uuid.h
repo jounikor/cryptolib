@@ -80,7 +80,7 @@ void uuid_unpack( uuid_t *, const void * );
 int uuid_create_v1( uuid_t *, const struct uuid_timeval *, const uint8_t * );
 int uuid_create_v2( uuid_t *, int32_t, int32_t, const struct uuid_timeval *  );
 int uuid_create_v3( uuid_t *, const void *, int );  /* URL based */
-int uuid_create_v4( uuid_t *, long );    /* random number based */
+int uuid_create_v4( uuid_t *, uint32_t );    /* random number based */
 int uuid_create_v5( uuid_t *, const void *, int );  /* 
 
 /**

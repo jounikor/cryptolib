@@ -19,6 +19,42 @@
 #include "uuid.h"
 #include "sha1.h"
 #include "synchronization.h"
+#include "rand.h"
+
+
+/* Name string is a fully-qualified domain name */
+static const uuid_t NameSpace_DNS = { /* 6ba7b810-9dad-11d1-80b4-00c04fd430c8 */
+	0x6ba7b810,
+	0x9dad,
+	0x11d1,
+	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+};
+
+/* Name string is a URL */
+static const uuid_t NameSpace_URL = { /* 6ba7b811-9dad-11d1-80b4-00c04fd430c8 */
+	0x6ba7b811,
+	0x9dad,
+	0x11d1,
+	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+};
+
+/* Name string is an ISO OID */
+static const uuid_t NameSpace_OID = { /* 6ba7b812-9dad-11d1-80b4-00c04fd430c8 */
+	0x6ba7b812,
+	0x9dad,
+	0x11d1,
+	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+};
+
+/* Name string is an X.500 DN (in DER or a text output format) */
+static const uuid_t NameSpace_X500 = { /* 6ba7b814-9dad-11d1-80b4-00c04fd430c8 */
+	0x6ba7b814,
+	0x9dad,
+	0x11d1,
+	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+};
+
+
 
 /**
  * \brief Test endianess whether we are using little endian.
@@ -184,9 +220,21 @@ int uuid_create_v3(uuid_t *u, const void *n, int l ) {
  *
  */
 
-int uuid_create_v4( uuid_t *u, long seed ) {
+int uuid_create_v4( uuid_t *u, uint32_t seed ) {
+	uint32_t *rnd;
 
+	if (seed) {
+		rand_init(MT19937,seed);
+	}
 
+	rnd = (uint32_t *)&u->uuid_a[0];
+	rnd[0] = rand_get32();
+	rnd[1] = rand_get32();
+	rnd[2] = rand_get32();
+	rnd[3] = rand_get32();
+	rnd[3] = 0;
+    u->uuid.time_hi_ver = u->uuid.time_hi_ver & 0x0fff | 0x4000;    /* version 4 UUID */
+    u->uuid.clock_seq_hi_var = u->uuid.clock_seq_hi_var & 0x3f | 0x80;	/* variant '0b10x' */
 	return UUID_SUCCESS;
 }
 
@@ -352,6 +400,7 @@ void print_uuid( const uuid_t *u ) {
 	for (n = 0; n < 6; n++) {
 		printf("%02x",b[12+n]);
 	}
+	printf("\n");
 }
 
 
@@ -359,9 +408,18 @@ void print_uuid( const uuid_t *u ) {
 int main( int argc, char **argv ) {
 
 	uuid_t u1;
+	uuid_t u2 = NameSpace_X500;
 
-	//uuid_create_v5();
+	print_uuid(&u2);
 
+
+
+	printf("%08x=%08x ja %04x=%04x\n",
+		0x11223344,swap32u(0x11223344),0xabcd,swap16u(0xabcd));
+
+
+	uuid_create_v4(&u1,0xabadcafe);
+	print_uuid(&u1);
 
 
 

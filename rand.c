@@ -37,7 +37,7 @@ static void init_MT19937( uint32_t seed ) {
 	index = 0;
 
 	for (n = 1; n < MT32SIZE; n++) {
-		mt.mt32[n] = 0x6c078965 * (mt.mt32[n-1] ^ mt.mt32[n-1] >> 30) + n;
+		mt.mt32[n] = 0x6c078965 * (mt.mt32[n-1] ^ (mt.mt32[n-1] >> 30)) + n;
 	}
 }
 
@@ -52,7 +52,7 @@ static uint32_t impl_MT19937( void ) {
 		for (n = 0; n < MT32SIZE; n++) {
 			y = (mt.mt32[n] & 0x80000000)						/* bit 31 (32nd bit) of mt[n] */
 			  + (mt.mt32[(n+1) % MT32SIZE] & 0x7fffffff);		/* bits 0-30 (first 31 bits) of mt[...] */
-			mt.mt32[n] = mt.mt32[(n + 397) % MT32SIZE] ^ y >> 1;
+			mt.mt32[n] = mt.mt32[(n + 397) % MT32SIZE] ^ (y >> 1);
 		
 			if (y & 1) { // y is odd
 				mt.mt32[n] = mt.mt32[n] ^ 0x9908b0df;
@@ -61,10 +61,10 @@ static uint32_t impl_MT19937( void ) {
 	}
 						    
 	y = mt.mt32[index++];
-	y = y ^ y >> 11;
-	y = y ^ (y >> 7 & 0x9d2c5680);
-	y = y ^ (y >> 15 & 0xefc60000);
-	y = y ^ y >> 18;
+	y ^= (y >> 11);
+	y ^= ((y << 7) & 0x9d2c5680);
+	y ^= ((y << 15) & 0xefc60000);
+	y ^= (y >> 18);
 
 	index %= MT32SIZE;
 
@@ -73,8 +73,6 @@ static uint32_t impl_MT19937( void ) {
 }
 
 
-static uint64_t mt64keys[] = {0x12345ULL, 0x23456ULL, 0x34567ULL, 0x45678ULL};
-static uint64_t mag01[2]={0ULL, 0xB5026F5AA96619E9ULL};	/* Up to MATRIX_A */
 static int index64;
 static int algo;
 
@@ -87,10 +85,8 @@ static void init_genrand64( uint64_t seed ) {
 	}
 }
 
-static void init_MT19937_64( void ) {
+static void init_MT19937_64( uint64_t *mt64keys, uint64_t key_length ) {
 	index64 = MT64SIZE+1;
-
-	uint64_t key_length = sizeof(mt64keys);
 	uint64_t i, j, k;
 
 	init_genrand64(19650218ULL);
@@ -128,7 +124,9 @@ static void init_MT19937_64( void ) {
 	mt.mt64[0] = 1ULL << 63; /* MSB is 1; assuring non-zero initial array */ 
 }
 
-static uint64_t impl_MT19937_64(void) {
+static const uint64_t m[] = {0ull, 0xB5026F5AA96619E9ULL};
+
+static uint64_t impl_MT19937_64( void ) {
 	int i;
 	uint64_t x;
 	
@@ -140,17 +138,17 @@ static uint64_t impl_MT19937_64(void) {
 		if (index64 == MT64SIZE+1) { 
 			init_genrand64(5489ULL); 
 		}
-		for (i = 0;i < MT64SIZE-MT64HALF; i++) {
+		for (i = 0; i < MT64SIZE-MT64HALF; i++) {
 			x = (mt.mt64[i] & 0xFFFFFFFF80000000ULL)|(mt.mt64[i+1] & 0x7FFFFFFFULL);
-			mt.mt64[i] = mt.mt64[i + MT64HALF] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
+			mt.mt64[i]	= mt.mt64[i + MT64HALF] ^ (x >> 1) ^ m[(x & 1ULL)];
 		}
 		for (; i < MT64SIZE-1; i++) {
 			x = (mt.mt64[i] & 0xFFFFFFFF80000000ULL)|(mt.mt64[i+1] & 0x7FFFFFFFULL);
-			mt.mt64[i] = mt.mt64[i + (MT64SIZE-MT64HALF)] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
+			mt.mt64[i] = mt.mt64[i + (MT64SIZE-MT64HALF)] ^ (x >> 1) ^ m[(x & 1ULL)];
 		}
 
 		x = (mt.mt64[MT64SIZE-1] & 0xFFFFFFFF80000000ULL)|(mt.mt64[0] & 0x7FFFFFFFULL);
-		mt.mt64[MT64SIZE-1] = mt.mt64[MT64HALF-1] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
+		mt.mt64[MT64SIZE-1] = mt.mt64[MT64HALF-1] ^ (x >> 1) ^ m[(x & 1ULL)];
 
 		index64 = 0;
 	}
@@ -180,18 +178,22 @@ int rand_init( int kind, ... ) {
 	int n;
 	uint32_t seed;
 	va_list va;
+	uint64_t *list;
+	uint64_t size;
 
 	switch (kind) {
 	case MT19937:
-
 		va_start(va,kind);
 		seed = va_arg(va,uint32_t);
 		va_end(va);
-
 		init_MT19937( seed );
 		break;
 	case MT19937_64:
-		init_MT19937_64();
+		va_start(va,kind);
+		list = va_arg(va,uint64_t *);
+		size = va_arg(va,uint64_t);
+		va_end(va);
+		init_MT19937_64(list,size);
 		break;
 	default:
 		return -1;
@@ -208,28 +210,40 @@ int rand_init( int kind, ... ) {
  *
  */
 
-uint64_t rand_get( void ) {
-	switch (algo) {
-	default:
-	case MT19937:
-		return (uint64_t)impl_MT19937();
-	case MT19937_64:
-		return impl_MT19937_64();
-		break;
-	}
+uint64_t rand_get64( void ) {
+	return impl_MT19937_64();
+}
+
+/**
+ * \brief Get a random number.. up to 32 bits..
+ *
+ *
+ *
+ */
+
+uint32_t rand_get32( void ) {
+	return impl_MT19937();
 }
 
 
+
+
+
+
 #if !defined(PARTOFLIBRARY)
+
+static const uint64_t mt64keys[] = {0x12345ULL, 0x23456ULL, 0x34567ULL, 0x45678ULL};
+
+
 int main( int argc, char **argv ) {
 	int n;
 
 	//rand_init(MT19937,0xabadcafe);
-	rand_init(MT19937_64);
+	rand_init(MT19937_64,mt64keys,4);
 
 	for (n = 0; n < 100/4; n++) {
 		printf("%16llx %16llx %16llx %16llx\n",
-			rand_get(),rand_get(),rand_get(),rand_get());
+			rand_get64(),rand_get64(),rand_get64(),rand_get64());
 	}
 
 	return 0;
