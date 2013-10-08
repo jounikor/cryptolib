@@ -56,7 +56,7 @@ typedef union uuid_u {
     uint8_t uuid_a[16];
 } uuid_t;
 
-
+#define UUID_SIZE sizeof(uuid_t)
 
 #define UUID_VERSION_MASK 0xf0
 #define UUID_VARIANT_MASK 0xc0  /**< Only "10x" variant type supported. */
@@ -79,9 +79,25 @@ void uuid_unpack( uuid_t *, const void * );
 
 int uuid_create_v1( uuid_t *, const struct uuid_timeval *, const uint8_t * );
 int uuid_create_v2( uuid_t *, int32_t, int32_t, const struct uuid_timeval *  );
-int uuid_create_v3( uuid_t *, const void *, int );  /* URL based */
+int uuid_create_v3( uuid_t *, int, const char *, const uuid_t * );  /* URL based */
 int uuid_create_v4( uuid_t *, uint32_t );    /* random number based */
-int uuid_create_v5( uuid_t *, const void *, int );  /* 
+int uuid_create_v5( uuid_t *, int, const char *, const uuid_t * );  /* 
+
+/*
+ * A set of predefined name space identifiers.
+ *
+ */
+
+enum uuid_name_space {
+    uuid_namespace_custom = 0,
+    uuid_namespace_dns,
+    uuid_namespace_url,
+    uuid_namespace_oid,
+    uuid_namespace_x500,
+    uuid_namespace_undefined
+};
+
+
 
 /**
  * \brief Error codes for UUID handling.
@@ -93,6 +109,7 @@ int uuid_create_v5( uuid_t *, const void *, int );  /*
 #define UUID_ERROR_NOT_SUPPORTED_VARIANT    1
 #define UUID_ERROR_NOT_SUPPORTED_VERSION    2
 #define UUID_ERROR_NO_MEMORY                3
-
+#define UUID_ERROR_UNKNOWN_NAMESPACE        4
+#define UUID_ERROR_INVALID_PARAMETER        5
 
 #endif /* _uuid_h_included */

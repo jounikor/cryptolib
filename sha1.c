@@ -238,6 +238,9 @@ static void sha1_free( crypto_context *ctx) {
 	}
 }
 
+static void sha1_free_dummy( crypto_context *ctx) {
+}
+
 /**
  * \brief Allocate and initialize the minumum of the SHA1 context.
  *   This is supposed to be the only exported function.
@@ -281,7 +284,7 @@ crypto_context *sha1_init( sha1_context *stx ) {
 	ctx->reset = sha1_reset;
 	ctx->update = sha1_update;
 	ctx->finish = sha1_finish;
-	ctx->free = (void(*)(crypto_context *))0;
+	ctx->free = sha1_free_dummy;
 	return ctx;
 }
 

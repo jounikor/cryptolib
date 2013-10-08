@@ -22,39 +22,40 @@
 #include "rand.h"
 
 
-/* Name string is a fully-qualified domain name */
-static const uuid_t NameSpace_DNS = { /* 6ba7b810-9dad-11d1-80b4-00c04fd430c8 */
-	0x6ba7b810,
-	0x9dad,
-	0x11d1,
-	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+static const uuid_t uuid_name_spaces[] = {
+    {0,0,0,0,0,0,0,0,0,0,0},
+    /* Name string is a fully-qualified domain name */
+    { /* 6ba7b810-9dad-11d1-80b4-00c04fd430c8 */
+    	0x6ba7b810,
+    	0x9dad,
+    	0x11d1,
+    	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+    },
+
+    /* Name string is a URL */
+    { /* 6ba7b811-9dad-11d1-80b4-00c04fd430c8 */
+	    0x6ba7b811,
+	    0x9dad,
+	    0x11d1,
+	    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+    },
+
+    /* Name string is an ISO OID */
+    { /* 6ba7b812-9dad-11d1-80b4-00c04fd430c8 */
+	    0x6ba7b812,
+	    0x9dad,
+	    0x11d1,
+	    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+    },
+
+    /* Name string is an X.500 DN (in DER or a text output format) */
+    { /* 6ba7b814-9dad-11d1-80b4-00c04fd430c8 */
+	    0x6ba7b814,
+	    0x9dad,
+	    0x11d1,
+	    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+    }
 };
-
-/* Name string is a URL */
-static const uuid_t NameSpace_URL = { /* 6ba7b811-9dad-11d1-80b4-00c04fd430c8 */
-	0x6ba7b811,
-	0x9dad,
-	0x11d1,
-	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
-};
-
-/* Name string is an ISO OID */
-static const uuid_t NameSpace_OID = { /* 6ba7b812-9dad-11d1-80b4-00c04fd430c8 */
-	0x6ba7b812,
-	0x9dad,
-	0x11d1,
-	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
-};
-
-/* Name string is an X.500 DN (in DER or a text output format) */
-static const uuid_t NameSpace_X500 = { /* 6ba7b814-9dad-11d1-80b4-00c04fd430c8 */
-	0x6ba7b814,
-	0x9dad,
-	0x11d1,
-	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
-};
-
-
 
 /**
  * \brief Test endianess whether we are using little endian.
@@ -208,7 +209,7 @@ int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac
  * \return UUID_SUCCESS if OK, otherwise a negative error code. 
  */
 
-int uuid_create_v3(uuid_t *u, const void *n, int l ) {
+int uuid_create_v3(uuid_t *u, int sp, const char *n, const uuid_t *sp2 ) {
     /* We do not support MD5, that's the reason.. */
     return UUID_ERROR_NOT_SUPPORTED_VERSION;
 }
@@ -232,7 +233,6 @@ int uuid_create_v4( uuid_t *u, uint32_t seed ) {
 	rnd[1] = rand_get32();
 	rnd[2] = rand_get32();
 	rnd[3] = rand_get32();
-	rnd[3] = 0;
     u->uuid.time_hi_ver = u->uuid.time_hi_ver & 0x0fff | 0x4000;    /* version 4 UUID */
     u->uuid.clock_seq_hi_var = u->uuid.clock_seq_hi_var & 0x3f | 0x80;	/* variant '0b10x' */
 	return UUID_SUCCESS;
@@ -243,19 +243,39 @@ int uuid_create_v4( uuid_t *u, uint32_t seed ) {
 /**
  * \brief UUID version 5 of variation '0b10x' (SHA-1 hash).
  * \param[out] u A pointer to UUID to store the output.
+ * \param[in] sp An index of a predefined name space identifier.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
+ * \param[in] sp2 A pointer to name space UUID if no predefined 
+ *   name space identifier is used.
  * \return UUID_SUCCESS if OK, otherwise a negative error code. 
  */
 
-int uuid_create_v5(uuid_t *u, const void *n, int l ) {
+int uuid_create_v5(uuid_t *u, int sp, const char *n, const uuid_t *sp2 ) {
     uint8_t hsh[SHA1_HSH_SIZE];
+    uint8_t buf[UUID_SIZE];
     sha1_context stx;
     crypto_context *ctx;
+    uuid_t space;
+
+    if (n == NULL || sp >= uuid_namespace_undefined) {
+        return -UUID_ERROR_INVALID_PARAMETER;
+    }
+    if (sp == 0 && sp2 == NULL) {
+        return -UUID_ERROR_INVALID_PARAMETER;
+    }
+    if (sp == 0) {
+        space = *sp2;
+    } else {
+        space = uuid_name_spaces[sp];
+    }
+    
+    uuid_serialize(buf,&space);
 
     ctx = sha1_init(&stx); 
     ctx->reset(ctx);
-    ctx->update(ctx,n,l);
+    ctx->update(ctx,buf,UUID_SIZE);
+    ctx->update(ctx,n,strlen(n));
     ctx->finish(ctx,hsh);
     ctx->free(ctx);
     
@@ -398,7 +418,7 @@ void print_uuid( const uuid_t *u ) {
 	}
 	printf("-");
 	for (n = 0; n < 6; n++) {
-		printf("%02x",b[12+n]);
+		printf("%02x",b[10+n]);
 	}
 	printf("\n");
 }
@@ -408,7 +428,8 @@ void print_uuid( const uuid_t *u ) {
 int main( int argc, char **argv ) {
 
 	uuid_t u1;
-	uuid_t u2 = NameSpace_X500;
+	uuid_t u2 = uuid_name_spaces[uuid_namespace_x500];
+    uuid_t u3;
 
 	print_uuid(&u2);
 
@@ -421,6 +442,8 @@ int main( int argc, char **argv ) {
 	uuid_create_v4(&u1,0xabadcafe);
 	print_uuid(&u1);
 
+    uuid_create_v5(&u3,uuid_namespace_dns,"www.widgets.com",NULL);
+    print_uuid(&u3);
 
 
     return 0;
