@@ -80,9 +80,9 @@ int uuid_cmp( const uuid_t *, const uuid_t * );
 
 int uuid_create_v1( uuid_t *, const struct uuid_timeval *, const uint8_t * );
 int uuid_create_v2( uuid_t *, int32_t, int32_t, const struct uuid_timeval *  );
-int uuid_create_v3( uuid_t *, int, const void *, int, const uuid_t * );  /* URL based */
+int uuid_create_v3( uuid_t *, const uuid_t *, const void *, int );  /* URL based */
 int uuid_create_v4( uuid_t *, uint32_t );    /* random number based */
-int uuid_create_v5( uuid_t *, int, const void *, int, const uuid_t * );
+int uuid_create_v5( uuid_t *, const uuid_t *, const void *, int );
 
 const uuid_t *uuid_get_namespace( int );
 

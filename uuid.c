@@ -145,18 +145,23 @@ int uuid_create_v2(uuid_t *u, int32_t uid, int32_t gid, const struct uuid_timeva
  * \param[out] u A pointer to the UUID.
  * \param[in] h A pointer to the hash value.
  * \param[in] v Version to put into the UUID.
- * \return Nothing.
+ * \return UUID_SUCCESS if OK. A negative value of UUID_ERROR_INVALID_PARAMETER
+ *   when there are issues with the input parameters.
  */
 
-static void fill_v3v5( uuid_t *u, const uuid_t *s,
+static int fill_v3v5( uuid_t *u, const uuid_t *ns,
 					const void *n, int l, int v, crypto_context *ctx ) {
     uint8_t hsh[SHA1_HSH_SIZE];		/* SHA1_HSH_SIZE > MD5_HSH_SIZE */
 	uint8_t buf[UUID_SIZE];
 	uint8_t *uu, x;
     uint16_t w;
 
+    if (n == NULL || ns == NULL) {
+        return -UUID_ERROR_INVALID_PARAMETER;
+    }
+	
 	/* Serialize the name space UUID */
-	uuid_serialize(buf,s);
+	uuid_serialize(buf,ns);
 	
 	/* calculate MD5 or SHA-1 */
 	ctx->reset(ctx);
@@ -180,6 +185,8 @@ static void fill_v3v5( uuid_t *u, const uuid_t *s,
     
 	/* fix it for the host presentation */
 	swap_endianess( u );
+
+	return UUID_SUCCESS;
 }
 
 /**
@@ -223,33 +230,18 @@ int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac
  * \brief UUID version 3 of variation '0b10x' (MD5 hash). This version
  *   of the UUID is not supported.
  * \param[out] u A pointer to UUID to store the output.
- * \param[in] sp A name space index.
+ * \param[in] ns A pointer to a name space.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
- * \param[in] sp2 A pointer to custom name space. May be NULL.
  * \return UUID_SUCCESS if OK, otherwise a negative error code. 
  */
 
-int uuid_create_v3(uuid_t *u, int sp, const void *n, int l, const uuid_t *sp2 ) {
+int uuid_create_v3(uuid_t *u, const uuid_t *ns, const void *n, int l ) {
     md5_context_t stx;
     crypto_context *ctx;
-    const uuid_t *s;
 
-    if (n == NULL || sp >= uuid_namespace_undefined) {
-        return -UUID_ERROR_INVALID_PARAMETER;
-    }
-    if (sp == uuid_namespace_nil && sp2 == NULL) {
-        return -UUID_ERROR_INVALID_PARAMETER;
-    }
-    if (sp == 0) {
-        s = sp2;
-    } else {
-        s = &uuid_name_spaces[sp];
-    }
-    
     ctx = md5_init(&stx); 
-    fill_v3v5( u, s, n, l, 3, ctx );
-    return UUID_SUCCESS;
+    return fill_v3v5( u, ns, n, l, 3, ctx );
 }
 
 /**
@@ -281,35 +273,19 @@ int uuid_create_v4( uuid_t *u, uint32_t seed ) {
 /**
  * \brief UUID version 5 of variation '0b10x' (SHA-1 hash).
  * \param[out] u A pointer to UUID to store the output.
- * \param[in] sp An index of a predefined name space identifier.
+ * \param[in] ns A pointer to a name space identifier.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
- * \param[in] sp2 A pointer to name space UUID if no predefined 
  *   name space identifier is used.
  * \return UUID_SUCCESS if OK, otherwise a negative error code. 
  */
 
-int uuid_create_v5(uuid_t *u, int sp, const void *n, int l, const uuid_t *sp2 ) {
+int uuid_create_v5(uuid_t *u, const uuid_t *ns, const void *n, int l ) {
     sha1_context stx;
     crypto_context *ctx;
-    const uuid_t *s;
-
-    if (n == NULL || sp >= uuid_namespace_undefined) {
-        return -UUID_ERROR_INVALID_PARAMETER;
-    }
-    if (sp == uuid_namespace_nil && sp2 == NULL) {
-        return -UUID_ERROR_INVALID_PARAMETER;
-    }
-    if (sp == uuid_namespace_nil) {
-        s = sp2;
-    } else {
-        s = &uuid_name_spaces[sp];
-    }
 
     ctx = sha1_init(&stx); 
-    fill_v3v5( u, s, n, l, 5, ctx );
-
-    return UUID_SUCCESS;
+    return fill_v3v5( u, ns, n, l, 5, ctx );
 }
 
 /**
@@ -491,7 +467,7 @@ int main( int argc, char **argv ) {
 	uuid_t u1;
 	uuid_t u2 = uuid_name_spaces[uuid_namespace_dns];
     uuid_t u3;
-	uuid_t u4;
+	uuid_t *ns;
 	struct uuid_timeval tv;
 	uint8_t mac[6] = {0x11,0x22,0x33,0x44,0x55,0x66};
 
@@ -507,8 +483,9 @@ int main( int argc, char **argv ) {
 	uuid_create_v4(&u1,0xabadcafe);
 	print_uuid(&u1);
 
-    //uuid_create_v5(&u3,uuid_namespace_dns,"www.example.org",15,NULL);
-    uuid_create_v5(&u3,uuid_namespace_dns,"www.widgets.com",15,NULL);
+
+	ns = uuid_get_namespace(uuid_namespace_dns);
+    uuid_create_v5(&u3,ns,"www.widgets.com",15);
     print_uuid(&u3);
 
 
