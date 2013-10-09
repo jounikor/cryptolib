@@ -18,6 +18,7 @@
 
 #include "uuid.h"
 #include "sha1.h"
+#include "md5.h"
 #include "synchronization.h"
 #include "rand.h"
 
@@ -26,10 +27,10 @@ static const uuid_t uuid_name_spaces[] = {
     {0,0,0,0,0,0,0,0,0,0,0},
     /* Name string is a fully-qualified domain name */
     { /* 6ba7b810-9dad-11d1-80b4-00c04fd430c8 */
-    	0x6ba7b810,
-    	0x9dad,
-    	0x11d1,
-    	0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+    	{0x6ba7b810},
+    	{0x9dad},
+    	{0x11d1},
+    	0x80, 0xb4, {0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
     },
 
     /* Name string is a URL */
@@ -210,8 +211,44 @@ int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac
  */
 
 int uuid_create_v3(uuid_t *u, int sp, const char *n, const uuid_t *sp2 ) {
-    /* We do not support MD5, that's the reason.. */
-    return UUID_ERROR_NOT_SUPPORTED_VERSION;
+    uint8_t hsh[MD5_HSH_SIZE];
+    uint8_t buf[UUID_SIZE];
+    md5_context_t stx;
+    crypto_context *ctx;
+    uuid_t space;
+
+    if (n == NULL || sp >= uuid_namespace_undefined) {
+        return -UUID_ERROR_INVALID_PARAMETER;
+    }
+    if (sp == 0 && sp2 == NULL) {
+        return -UUID_ERROR_INVALID_PARAMETER;
+    }
+    if (sp == 0) {
+        space = *sp2;
+    } else {
+        space = uuid_name_spaces[sp];
+    }
+    
+    uuid_serialize(buf,&space);
+
+    ctx = md5_init(&stx); 
+    ctx->reset(ctx);
+    ctx->update(ctx,buf,UUID_SIZE);
+    ctx->update(ctx,n,strlen(n));
+    ctx->finish(ctx,hsh);
+    ctx->free(ctx);
+    
+    /* Use only 128 first bits out of the MD5 hash and versio 3*/
+   
+    fill_v3v5( u, hsh, 3 );
+
+    /* Shuffle the structure into host byte order.. We should use proper
+     * libraries or project wide defines for this purpose but we are
+     * not.. lame..
+     */
+    
+    swap_endianess( u );
+    return UUID_SUCCESS;
 }
 
 /**
@@ -428,7 +465,7 @@ void print_uuid( const uuid_t *u ) {
 int main( int argc, char **argv ) {
 
 	uuid_t u1;
-	uuid_t u2 = uuid_name_spaces[uuid_namespace_x500];
+	uuid_t u2 = uuid_name_spaces[uuid_namespace_dns];
     uuid_t u3;
 
 	print_uuid(&u2);
@@ -442,7 +479,7 @@ int main( int argc, char **argv ) {
 	uuid_create_v4(&u1,0xabadcafe);
 	print_uuid(&u1);
 
-    uuid_create_v5(&u3,uuid_namespace_dns,"www.widgets.com",NULL);
+    uuid_create_v3(&u3,uuid_namespace_dns,"www.widgets.com",NULL);
     print_uuid(&u3);
 
 
