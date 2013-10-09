@@ -27,9 +27,9 @@ static const uuid_t uuid_name_spaces[] = {
     {0,0,0,0,0,0,0,0,0,0,0},
     /* Name string is a fully-qualified domain name */
     { /* 6ba7b810-9dad-11d1-80b4-00c04fd430c8 */
-    	{0x6ba7b810},
-    	{0x9dad},
-    	{0x11d1},
+    	0x6ba7b810,
+    	0x9dad,
+    	0x11d1,
     	0x80, 0xb4, {0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
     },
 
@@ -38,7 +38,7 @@ static const uuid_t uuid_name_spaces[] = {
 	    0x6ba7b811,
 	    0x9dad,
 	    0x11d1,
-	    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+	    0x80, 0xb4, {0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
     },
 
     /* Name string is an ISO OID */
@@ -46,7 +46,7 @@ static const uuid_t uuid_name_spaces[] = {
 	    0x6ba7b812,
 	    0x9dad,
 	    0x11d1,
-	    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+	    0x80, 0xb4, {0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
     },
 
     /* Name string is an X.500 DN (in DER or a text output format) */
@@ -54,7 +54,7 @@ static const uuid_t uuid_name_spaces[] = {
 	    0x6ba7b814,
 	    0x9dad,
 	    0x11d1,
-	    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8
+	    0x80, 0xb4, {0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
     }
 };
 
@@ -148,11 +148,26 @@ int uuid_create_v2(uuid_t *u, int32_t uid, int32_t gid, const struct uuid_timeva
  * \return Nothing.
  */
 
-static void fill_v3v5( uuid_t *u, const void *h, int v ) {
-    uint8_t *uu, x;
+static void fill_v3v5( uuid_t *u, const uuid_t *s,
+					const void *n, int l, int v, crypto_context *ctx ) {
+    uint8_t hsh[SHA1_HSH_SIZE];		/* SHA1_HSH_SIZE > MD5_HSH_SIZE */
+	uint8_t buf[UUID_SIZE];
+	uint8_t *uu, x;
     uint16_t w;
-    memcpy(u,h,sizeof(uuid_t));
+
+	/* Serialize the name space UUID */
+	uuid_serialize(buf,s);
+	
+	/* calculate MD5 or SHA-1 */
+	ctx->reset(ctx);
+    ctx->update(ctx,buf,UUID_SIZE);
+    ctx->update(ctx,n,l);
+    ctx->finish(ctx,hsh);
+    ctx->free(ctx);
     
+	/* copy the hash over the destination UUID */
+	memcpy(u,hsh,sizeof(uuid_t));
+
     /* fix version and variant */
     uu = (uint8_t *)u;
     x = uu[UUID_VERSION_INDEX];
@@ -162,6 +177,9 @@ static void fill_v3v5( uuid_t *u, const void *h, int v ) {
     x = uu[UUID_VARIANT_INDEX];
     x = x & 0x3f | 0x80;    /* only variany '0b10x' supported */
     uu[UUID_VARIANT_INDEX] = x;
+    
+	/* fix it for the host presentation */
+	swap_endianess( u );
 }
 
 /**
@@ -205,49 +223,32 @@ int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac
  * \brief UUID version 3 of variation '0b10x' (MD5 hash). This version
  *   of the UUID is not supported.
  * \param[out] u A pointer to UUID to store the output.
+ * \param[in] sp A name space index.
  * \param[in] n A pointer to a buffer holding an URL.
  * \param[in] l The length of the buffer.
+ * \param[in] sp2 A pointer to custom name space. May be NULL.
  * \return UUID_SUCCESS if OK, otherwise a negative error code. 
  */
 
-int uuid_create_v3(uuid_t *u, int sp, const char *n, const uuid_t *sp2 ) {
-    uint8_t hsh[MD5_HSH_SIZE];
-    uint8_t buf[UUID_SIZE];
+int uuid_create_v3(uuid_t *u, int sp, const void *n, int l, const uuid_t *sp2 ) {
     md5_context_t stx;
     crypto_context *ctx;
-    uuid_t space;
+    const uuid_t *s;
 
     if (n == NULL || sp >= uuid_namespace_undefined) {
         return -UUID_ERROR_INVALID_PARAMETER;
     }
-    if (sp == 0 && sp2 == NULL) {
+    if (sp == uuid_namespace_nil && sp2 == NULL) {
         return -UUID_ERROR_INVALID_PARAMETER;
     }
     if (sp == 0) {
-        space = *sp2;
+        s = sp2;
     } else {
-        space = uuid_name_spaces[sp];
+        s = &uuid_name_spaces[sp];
     }
     
-    uuid_serialize(buf,&space);
-
     ctx = md5_init(&stx); 
-    ctx->reset(ctx);
-    ctx->update(ctx,buf,UUID_SIZE);
-    ctx->update(ctx,n,strlen(n));
-    ctx->finish(ctx,hsh);
-    ctx->free(ctx);
-    
-    /* Use only 128 first bits out of the MD5 hash and versio 3*/
-   
-    fill_v3v5( u, hsh, 3 );
-
-    /* Shuffle the structure into host byte order.. We should use proper
-     * libraries or project wide defines for this purpose but we are
-     * not.. lame..
-     */
-    
-    swap_endianess( u );
+    fill_v3v5( u, s, n, l, 3, ctx );
     return UUID_SUCCESS;
 }
 
@@ -288,45 +289,26 @@ int uuid_create_v4( uuid_t *u, uint32_t seed ) {
  * \return UUID_SUCCESS if OK, otherwise a negative error code. 
  */
 
-int uuid_create_v5(uuid_t *u, int sp, const char *n, const uuid_t *sp2 ) {
-    uint8_t hsh[SHA1_HSH_SIZE];
-    uint8_t buf[UUID_SIZE];
+int uuid_create_v5(uuid_t *u, int sp, const void *n, int l, const uuid_t *sp2 ) {
     sha1_context stx;
     crypto_context *ctx;
-    uuid_t space;
+    const uuid_t *s;
 
     if (n == NULL || sp >= uuid_namespace_undefined) {
         return -UUID_ERROR_INVALID_PARAMETER;
     }
-    if (sp == 0 && sp2 == NULL) {
+    if (sp == uuid_namespace_nil && sp2 == NULL) {
         return -UUID_ERROR_INVALID_PARAMETER;
     }
-    if (sp == 0) {
-        space = *sp2;
+    if (sp == uuid_namespace_nil) {
+        s = sp2;
     } else {
-        space = uuid_name_spaces[sp];
+        s = &uuid_name_spaces[sp];
     }
-    
-    uuid_serialize(buf,&space);
 
     ctx = sha1_init(&stx); 
-    ctx->reset(ctx);
-    ctx->update(ctx,buf,UUID_SIZE);
-    ctx->update(ctx,n,strlen(n));
-    ctx->finish(ctx,hsh);
-    ctx->free(ctx);
-    
-    /* Use only 128 first bits out of the SHA-1 hash and versio 5*/
-   
-    fill_v3v5( u, hsh, 5 );
+    fill_v3v5( u, s, n, l, 5, ctx );
 
-    /* Shuffle the structure into host byte order.. We should use proper
-     * libraries or project wide defines for this purpose but we are
-     * not.. lame..
-     */
-    
-    swap_endianess( u );
-    
     return UUID_SUCCESS;
 }
 
@@ -426,6 +408,48 @@ int uuid_is_zero( const uuid_t *u ) {
     return 1;
 }
 
+/**
+ * \brief Compare two UUIDs.
+ * \param[in] a A pointer to UUID.
+ * \param[in] b A pointer to UUID.
+ * \return 0 if UUIDs are equal, 1 if a > b, -1 if a < b.
+ */
+
+int uuid_cmp( const uuid_t *a, const uuid_t *b ) {
+	uint8_t aa[UUID_SIZE];
+	uint8_t bb[UUID_SIZE];
+	int n;
+
+	uuid_serialize(aa,a);
+	uuid_serialize(bb,b);
+
+	for (n = 0; n < UUID_SIZE; n++) {
+		if (aa[n] < bb[n]) {
+			return -1;
+		}
+		if (aa[n] > bb[n]) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
+/**
+ * \brief Return one of the predefined UUIDs for name spaces.
+ * \param[in] n The name space index.
+ * \return A pointer to a name space UUID or NULL if the
+ *   name space does not exist.
+ */
+
+const uuid_t *uuid_get_namespace( int n ) {
+	if (n < 0 || n > uuid_namespace_undefined) {
+		return NULL;
+	} else {
+		return &uuid_name_spaces[n];
+	}
+}
+
 
 //#if !defined(PARTOFLIBRARY)
 
@@ -479,7 +503,8 @@ int main( int argc, char **argv ) {
 	uuid_create_v4(&u1,0xabadcafe);
 	print_uuid(&u1);
 
-    uuid_create_v3(&u3,uuid_namespace_dns,"www.widgets.com",NULL);
+    //uuid_create_v5(&u3,uuid_namespace_dns,"www.example.org",15,NULL);
+    uuid_create_v5(&u3,uuid_namespace_dns,"www.widgets.com",15,NULL);
     print_uuid(&u3);
 
 
