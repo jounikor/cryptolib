@@ -199,8 +199,8 @@ int uuid_create_v1( uuid_t *u, const struct uuid_timeval *tv, const uint8_t *mac
      * Convert that to the UNIX base time, i.e. January 1, 1970.
      */
 
-    t = (uint64_t)(10 * tv->tv_usec);       /* 1 usec = 10 * 100 nanosec */
-    t += (uint64_t)(10000000 * tv->tv_sec); /* 1 sec = 10^7 * 100 nanosec */
+    t = (uint64_t)(10ULL * tv->tv_usec);       /* 1 usec = 10 * 100 nanosec */
+    t += (uint64_t)(10000000ULL * tv->tv_sec); /* 1 sec = 10^7 * 100 nanosec */
     t += 0x01B21DD213814000ULL;             /* 100 nanosecs since October 15, 1582 */
 
     /* The MAC address is assumed to be 48 bits */
@@ -484,20 +484,24 @@ void print_uuid( const uuid_t *u ) {
 	printf("\n");
 }
 
-
+#include <sys/time.h>
 
 int main( int argc, char **argv ) {
 
 	uuid_t u1;
 	uuid_t u2 = uuid_name_spaces[uuid_namespace_dns];
     uuid_t u3;
+	uuid_t u4;
+	struct uuid_timeval tv;
+	uint8_t mac[6] = {0x11,0x22,0x33,0x44,0x55,0x66};
 
 	print_uuid(&u2);
 
-
-
-	printf("%08x=%08x ja %04x=%04x\n",
-		0x11223344,swap32u(0x11223344),0xabcd,swap16u(0xabcd));
+	gettimeofday((struct timeval*)&tv,NULL);
+	printf("tv.sec = %d, tv.usec = %d\n",tv.tv_sec,tv.tv_usec);
+	
+	uuid_create_v1(&u1,&tv,mac);
+	print_uuid(&u1);
 
 
 	uuid_create_v4(&u1,0xabadcafe);
