@@ -10,12 +10,12 @@
 	make all
 #
 
-SRCS = hmac.c sha1.c bignum.c uuid.c rand.c md5.c
+SRCS = hmac.c sha1.c bignum.c uuid.c rand.c md5.c sha256.c
 
 OBJS := $(patsubst %.c,%.o,$(SRCS))
 
 HDRS = hmac.h sha1.h algorithm_types.h crypto_error.h bignum.h \
-       uuid.h rand.h synchronization.h md5.h
+       uuid.h rand.h synchronization.h md5.h sha256.h
 
 #
 

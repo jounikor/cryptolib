@@ -81,16 +81,18 @@ static inline uint8_t *putlong( uint8_t *b, uint32_t l ) {
 }
 
 /**
- * \brief Update the SHA-1 hash value. The implementation is based
- *   on the RFC3174 Method 2, i.e. the memory efficient version.
+ * \brief Update the SHA-224 or SHA-256 hash value. This is a 
+ *   memory efficient implementation using the W[] in a 
+ *   circular buffer manner. Also all transformation and reading
+ *   the input buffer is done in one loop.
  *
- * \param ctx A pointer to the sha1_context.
+ * \param[in] ctx A pointer to the sha256_context_t.
  *
  * \return Nothing.
  */
 
 static void sha2xx_update_block( sha256_context_t *ctx ) {
-    uint32_t W[64];
+    uint32_t W[16];
     uint32_t A = ctx->H[0];
     uint32_t B = ctx->H[1];
     uint32_t C = ctx->H[2];
@@ -101,24 +103,20 @@ static void sha2xx_update_block( sha256_context_t *ctx ) {
     uint32_t H = ctx->H[7];
     int i;
 
-    /* intialize the W[].. 16 first long words */
-
-    for (i = 0; i < 64; i++) {
-        W[i] = getlong(ctx->buf + i*4);
-    }
 	for (i = 0; i < 64; i++) {
         uint32_t t1, t2, s1, ch, s0, maj;
         uint32_t w = 0;
 
         if (i < 16) {
-            w = W[i];
+            w = W[i] = getlong(ctx->buf + i*4);
         } else {
             uint32_t s0, s1, t;
-            
-            t = W[i-15]; s0 = ROR(7,t) ^ ROR(18,t) ^ LSR(3,t); 
-            t = W[i-2];  s1 = ROR(17,t) ^ ROR(19,t) ^ LSR(10,t);
-            w = W[i-16] + s0 + W[i-7] + s1;
-            W[i] = w;
+#define MODI(x) (x & 0x0f)
+            t = W[MODI(i-15)]; s0 = ROR(7,t) ^ ROR(18,t) ^ LSR(3,t); 
+            t = W[MODI(i-2)];  s1 = ROR(17,t) ^ ROR(19,t) ^ LSR(10,t);
+            w = W[MODI(i-16)] + s0 + W[MODI(i-7)] + s1;
+            W[MODI(i)] = w;
+#undef MODI
         }
         
         s1 = ROR(6,E) ^ ROR(11,E) ^ ROR(25,E);
@@ -126,7 +124,7 @@ static void sha2xx_update_block( sha256_context_t *ctx ) {
         t1 = H + s1 + ch + k[i] + w;
 
         s0 = ROR(2,A) ^ ROR(13,A) ^ ROR(22,A);
-        maj = (A & B) ^ (A & C)  ^ (B & C);
+        maj = (A & (B ^ C)) ^ (B & C);  /* == (A & B) ^ (A & C)  ^ (B & C); */
         t2 = s0 + maj;
     
         H = G;
