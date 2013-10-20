@@ -63,12 +63,12 @@ static inline uint8_t *putlong( uint8_t *b, uint32_t l ) {
  * \brief Update the SHA-1 hash value. The implementation is based
  *   on the RFC3174 Method 2, i.e. the memory efficient version.
  *
- * \param ctx A pointer to the sha1_context.
+ * \param ctx A pointer to the sha1_context_t.
  *
  * \return Nothing.
  */
 
-static void sha1_update_block( sha1_context *ctx ) {
+static void sha1_update_block( sha1_context_t *ctx ) {
     uint32_t W[16];
     uint32_t A = ctx->H[0];
     uint32_t B = ctx->H[1];
@@ -130,7 +130,7 @@ static int sha1_reset( crypto_context *hdr, ... ) {
 	/* Note that we must not override the hdr->context value.. */
 
 	assert(hdr);
-	sha1_context *ctx = (sha1_context *)hdr;
+	sha1_context_t *ctx = (sha1_context_t *)hdr;
 	ctx->index = 0;
 
     /* Initialize intermediate hash values */
@@ -157,7 +157,7 @@ static int sha1_reset( crypto_context *hdr, ... ) {
  */
 
 static void sha1_update( crypto_context *hdr, const void *buf, int len ) {
-    sha1_context *ctx = (sha1_context *)hdr;
+    sha1_context_t *ctx = (sha1_context_t *)hdr;
 	int pos = 0;
     uint8_t *b = (uint8_t *)buf;
 
@@ -194,7 +194,7 @@ static void sha1_update( crypto_context *hdr, const void *buf, int len ) {
  */
 
 static void sha1_finish( crypto_context *hdr, uint8_t *out ) {
-	sha1_context *ctx = (sha1_context *)hdr;
+	sha1_context_t *ctx = (sha1_context_t *)hdr;
 	int idx = ctx->index & SHA1_BLK_MASK;
     int64_t flen = ctx->index * 8;
     int32_t hlen = flen >> 32;
@@ -245,21 +245,18 @@ static void sha1_free_dummy( crypto_context *ctx) {
  * \brief Allocate and initialize the minumum of the SHA1 context.
  *   This is supposed to be the only exported function.
  *
- * \param  
- * \param
- *
  * \return A pointer to the allocated and minimally intialized sha1_context.
  *   NULL if the allocation failed.
  */
 
 crypto_context *sha1_alloc( void ) {
-	crypto_context *ctx = malloc(sizeof(sha1_context));
+	crypto_context *ctx = malloc(sizeof(sha1_context_t));
 
 	if (ctx == NULL) {
 		return NULL;
 	}
 
-	sha1_init((sha1_context *)ctx);
+	sha1_init((sha1_context_t *)ctx);
 	ctx->free = sha1_free;
 	return ctx;
 }
@@ -267,15 +264,15 @@ crypto_context *sha1_alloc( void ) {
 /**
  * \brief Initialize sha1_context when located in a heap.
  *
- * \param stx A pointer to the SHA1 context to initialize.
+ * \param[in] stx A pointer to the SHA1 context to initialize.
  *
  * \return A pointer to crypto_context (which points to the
  *   input parameter sha1_context.
  */
 
-crypto_context *sha1_init( sha1_context *stx ) {
+crypto_context *sha1_init( sha1_context_t *stx ) {
 	crypto_context *ctx = (crypto_context *)stx;
-	memset(ctx,0,sizeof(sha1_context));
+	memset(ctx,0,sizeof(sha1_context_t));
 	
 	ctx->algorithm = TEE_ALG_SHA1;
 	ctx->size = SHA1_HSH_SIZE << 3;
@@ -297,7 +294,7 @@ crypto_context *sha1_init( sha1_context *stx ) {
  */
 
 size_t sha1_context_size( void ) {
-	return sizeof(sha1_context);
+	return sizeof(sha1_context_t);
 }
 
 

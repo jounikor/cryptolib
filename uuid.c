@@ -281,7 +281,7 @@ int uuid_create_v4( uuid_t *u, uint32_t seed ) {
  */
 
 int uuid_create_v5(uuid_t *u, const uuid_t *ns, const void *n, int l ) {
-    sha1_context stx;
+    sha1_context_t stx;
     crypto_context *ctx;
 
     ctx = sha1_init(&stx); 
@@ -427,7 +427,7 @@ const uuid_t *uuid_get_namespace( int n ) {
 }
 
 
-//#if !defined(PARTOFLIBRARY)
+#if !defined(PARTOFLIBRARY)
 
 void print_uuid( const uuid_t *u ) {
 	int n,m;
@@ -493,5 +493,5 @@ int main( int argc, char **argv ) {
 }
 
 
-//#endif
+#endif
 

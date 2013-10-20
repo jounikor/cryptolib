@@ -2,8 +2,8 @@
  * \file hmac.c
  * \brief Generic HMAC calculation routines
  * \author Jouni Korhonen
- * \version 0.1
- * \date 2013-9-7
+ * \version 0.2
+ * \date 2013-10-20
  * \warning These are just made for self educational purposes!
  * \copyright Not GPL
  */
@@ -17,6 +17,8 @@
 
 #include "hmac.h"
 #include "sha1.h"
+#include "sha256.h"
+#include "md5.h"
 #include "algorithm_types.h"
 #include "crypto_error.h"
 
@@ -166,22 +168,19 @@ static void hmac_update( crypto_context *ctx, const void *buf, int len ) {
 /**
  * \brief Free the context structure.
  *
- * \param A pointer to a valid context structure.
+ * \param[in] A pointer to a valid context structure.
  * \return None.
  */
 
 static void hmac_free( crypto_context* ctx ) {
-	hmac_context *htx;
+	hmac_context *htx = hmac_get_hmac(ctx);
+    htx->digest->free(htx->digest);
+    free(ctx);
+}
 
-	if (ctx) {
-		assert( htx = hmac_get_hmac(ctx) );
-		
-		/* note that the digest context may be allocated in a heap */
-		if (htx->digest->free) {
-			htx->digest->free(htx->digest);
-		}
-		free(ctx);
-	}
+static void hmac_free_dummy( crypto_context* ctx ) {
+	hmac_context *htx = hmac_get_hmac(ctx);
+    htx->digest->free(htx->digest);
 }
 
 /**
@@ -254,82 +253,84 @@ crypto_context *hmac_init( hmac_context *htx, crypto_context *dtx ) {
 	ctx->reset = hmac_reset;
 	ctx->update = hmac_update;
 	ctx->finish = hmac_finish;
-	ctx->free = (void(*)(crypto_context *))0;
+	ctx->free = hmac_free_dummy;
 
 	return ctx;
 }
 
 
-#if !defined(PARTOFLIBRARY)
+//#if !defined(PARTOFLIBRARY)
 
 /*
- * test_case =     1
- * key =           0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b
- * key_len =       20
- * data =          "Hi There"
- * data_len =      8
- * digest =        0xb617318655057264e28bc0b6fb378c8ef146be00
+
+HMAC_MD5("key", "The quick brown fox jumps over the lazy dog") 
+    = 0x80070713463e7749b90c2dc24911e275
+HMAC_SHA1("key", "The quick brown fox jumps over the lazy dog") 
+    = 0xde7c9b85b8b78aa6bc8a7a36f70a90701c9db4d9
+HMAC_SHA256("key", "The quick brown fox jumps over the lazy dog") 
+    = 0xf7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
+
  */
+
+static char msg[] = "The quick brown fox jumps over the lazy dog";
+
+static void output( uint8_t *b, int n, char *t ) {
+    int m;
+    printf("%s\n",t);
+
+    for (m = 0; m < n; m++) {
+		printf("%02x",b[m]);
+	}
+	printf("\n");
+}
+
 
 
 int main( int argc, char** argv ) {
-	uint8_t key[] = {	0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b,
-						0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b	};
-	
-	//uint8_t key[] = "jounikorhonen";
-
-	crypto_context *hash, *hmac_sha1;
-
-	sha1_context sha1;
-	hmac_context hmac;
-
-	hash = sha1_init(&sha1);
-	hmac_sha1 = hmac_init(&hmac,hash);
-
-	int keylen = sizeof(key);
-	uint8_t data[] = "Hi There";
-	int datalen = strlen(data);
-	uint8_t digest[SHA1_HSH_SIZE];
+	uint8_t digest_md5[MD5_HSH_SIZE];
+	uint8_t digest_sha1[SHA1_HSH_SIZE];
+	uint8_t digest_sha256[SHA256_HSH_SIZE];
+	crypto_context  *hsh, *hmac_sha1, *hmac_sha256, *hmac_md5;
 	int n;
 
-	crypto_context *ctx = hmac_alloc(TEE_ALG_HMAC_SHA1);
+	sha1_context_t sha1;
+	sha256_context_t sha256;
+	md5_context_t md5;
+	hmac_context h_md5;
+	hmac_context h_sha1;
+	hmac_context h_sha256;
 
-	n = ctx->reset(ctx,CTAG_KEY,key,CTAG_KEY_LEN,keylen,CTAG_DONE);
+    hsh = md5_init(&md5);
+    hmac_md5 = hmac_init(&h_md5,hsh);
 
-	if (n) {
-		printf("hmac_reset() failed with %d\n",n);
-		hmac_free(ctx);
-		return 0;
-	}
+    hsh = sha1_init(&sha1);
+    hmac_sha1 = hmac_init(&h_sha1,hsh);
+    
+    hsh = sha256_init(&sha256);
+    hmac_sha256 = hmac_init(&h_sha256,hsh);
 
-	ctx->update(ctx,data,datalen);
-	ctx->finish(ctx,digest);
+	hmac_md5->reset(hmac_md5,CTAG_KEY,"key",CTAG_KEY_LEN,3,CTAG_DONE);
+	hmac_sha1->reset(hmac_sha1,CTAG_KEY,"key",CTAG_KEY_LEN,3,CTAG_DONE);
+	hmac_sha256->reset(hmac_sha256,CTAG_KEY,"key",CTAG_KEY_LEN,3,CTAG_DONE);
 
-    for (n = 0; n < SHA1_HSH_SIZE; n++) {
-		printf("%02x",digest[n]);
-		digest[n] = 0;
-	}
-	printf("\n");
+	hmac_md5->update(hmac_md5,msg,strlen(msg));
+	hmac_md5->finish(hmac_md5,digest_md5);
 
-	ctx->free(ctx);
+	hmac_sha1->update(hmac_sha1,msg,strlen(msg));
+	hmac_sha1->finish(hmac_sha1,digest_sha1);
 
-	//
+	hmac_sha256->update(hmac_sha256,msg,strlen(msg));
+	hmac_sha256->finish(hmac_sha256,digest_sha256);
 
-	n = hmac_sha1->reset(hmac_sha1,CTAG_KEY,key,CTAG_KEY_LEN,keylen,CTAG_DONE);
-	if (n) {
-		printf("2. hmac_reset() failed with %d\n",n);
-		return 0;
-	}
+    output(digest_md5,MD5_HSH_SIZE,"MD5:");
+    output(digest_sha1,SHA1_HSH_SIZE,"SHA1:");
+    output(digest_sha256,SHA256_HSH_SIZE,"SHA256:");
 
-	hmac_sha1->update(hmac_sha1,data,datalen);
-	hmac_sha1->finish(hmac_sha1,digest);
-
-    for (n = 0; n < SHA1_HSH_SIZE; n++) {
-		printf("%02x",digest[n]);
-	}
-	printf("\n");
+    hmac_md5->free(hmac_md5);
+    hmac_sha1->free(hmac_sha1);
+    hmac_sha256->free(hmac_sha256);
 
 	return 0;
 }
 
-#endif
+//#endif

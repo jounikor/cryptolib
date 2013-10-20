@@ -27,7 +27,7 @@ typedef struct sha1_context_s {
 	int64_t index;      /* number of octets processed so far */
     uint32_t H[5];
     uint8_t buf[SHA1_BLK_SIZE];
-} sha1_context;
+} sha1_context_t;
 
 /**
  * \brief Prototypes for SHA-1 calculation. 
@@ -35,6 +35,6 @@ typedef struct sha1_context_s {
  */
 
 crypto_context *sha1_alloc( void );
-crypto_context *sha1_init( sha1_context * );
+crypto_context *sha1_init( sha1_context_t * );
 
 #endif /* _sha1_h_included */
