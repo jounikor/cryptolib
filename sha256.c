@@ -1,5 +1,5 @@
 /**
- * \file sha2.c
+ * \file sha256.c
  * \brief A simple and memory efficient implementation of the
  *   SHA-256 and SHA-224 digests. The implementation is based on the RFC6234.
  *   Only the very primitive interface to calculate a digest is provided
@@ -15,38 +15,17 @@
 #include <stdlib.h>
 
 #include <memory.h>
-#include <assert.h>
 #include "sha256.h"
 #include "crypto_error.h"
 
 /* potential candidate for inline asm */
-#define ROR(n,w) (((w) > (n)) | ((w) << (32-(n))))
+#define ROR(n,w) (((w) >> (n)) | ((w) << (32-(n))))
 #define LSR(n,w) ((w) >> (n))
 #define MSK(n) (n & 0xf)
 
-#if 0
-
-SHA-224 & SHA-256
-
-CH( x, y, z) = (x AND y) XOR ( (NOT x) AND z)
-MAJ( x, y, z) = (x AND y) XOR (x AND z) XOR (y AND z)
-BSIG0(x) = ROTR^2(x) XOR ROTR^13(x) XOR ROTR^22(x)
-BSIG1(x) = ROTR^6(x) XOR ROTR^11(x) XOR ROTR^25(x)
-SSIG0(x) = ROTR^7(x) XOR ROTR^18(x) XOR SHR^3(x)
-SSIG1(x) = ROTR^17(x) XOR ROTR^19(x) XOR SHR^10(x)
-
-/*
-
-  Padding for SHA-224 & SHA-256:
-  	( L + 1 + K ) mod 512 = 448
-
-*/
-
-
-
 /* SHA-224 & 256 constants: */
 
-static const uint32_t k256[] = {
+static const uint32_t k[] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
 	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
 	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -64,9 +43,6 @@ static const uint32_t k256[] = {
 	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
 	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
-
-#endif
-
 
 /**
  * \brief Extract a BIG_ENDIAN unsigned long word out of the buffer.
@@ -113,8 +89,8 @@ static inline uint8_t *putlong( uint8_t *b, uint32_t l ) {
  * \return Nothing.
  */
 
-static void sha256_update_block( sha256_context_t *ctx ) {
-    uint32_t W[16];
+static void sha2xx_update_block( sha256_context_t *ctx ) {
+    uint32_t W[64];
     uint32_t A = ctx->H[0];
     uint32_t B = ctx->H[1];
     uint32_t C = ctx->H[2];
@@ -123,28 +99,44 @@ static void sha256_update_block( sha256_context_t *ctx ) {
     uint32_t F = ctx->H[5];
     uint32_t G = ctx->H[6];
     uint32_t H = ctx->H[7];
-
-
     int i;
 
     /* intialize the W[].. 16 first long words */
 
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < 64; i++) {
         W[i] = getlong(ctx->buf + i*4);
     }
-    /* method 2 from RFC3174 */
-    for (i = 16; i < 64; i++) {
-		uint32_t s0, s1;
-/*
- *    for i from 16 to 63
- *		s0 := (w[i-15] rightrotate 7) xor (w[i-15] rightrotate 18) xor (w[i-15] rightshift 3)
- *		s1 := (w[i-2] rightrotate 17) xor (w[i-2] rightrotate 19) xor (w[i-2] rightshift 10)
- *		w[i] := w[i-16] + s0 + w[i-7] + s1
- */
+	for (i = 0; i < 64; i++) {
+        uint32_t t1, t2, s1, ch, s0, maj;
+        uint32_t w = 0;
 
-		s0 = ROR();
+        if (i < 16) {
+            w = W[i];
+        } else {
+            uint32_t s0, s1, t;
+            
+            t = W[i-15]; s0 = ROR(7,t) ^ ROR(18,t) ^ LSR(3,t); 
+            t = W[i-2];  s1 = ROR(17,t) ^ ROR(19,t) ^ LSR(10,t);
+            w = W[i-16] + s0 + W[i-7] + s1;
+            W[i] = w;
+        }
+        
+        s1 = ROR(6,E) ^ ROR(11,E) ^ ROR(25,E);
+        ch = (E & F) ^ (~E & G);
+        t1 = H + s1 + ch + k[i] + w;
 
-
+        s0 = ROR(2,A) ^ ROR(13,A) ^ ROR(22,A);
+        maj = (A & B) ^ (A & C)  ^ (B & C);
+        t2 = s0 + maj;
+    
+        H = G;
+        G = F;
+        F = E;
+        E = D + t1;
+        D = C;
+        C = B;
+        B = A;
+        A = t1 + t2;
     }
 
     ctx->H[0] += A;
@@ -159,30 +151,41 @@ static void sha256_update_block( sha256_context_t *ctx ) {
 
 
 /**
- * \brief Initialize the SHA-1 context for streamed hash
+ * \brief Initialize the SHA256 context for streamed hash
  *   calculation.
  *
  * \paramm ctx A pointer to the sha1_context.
  */
 
-static int sha256_reset( crypto_context *hdr, ... ) {
+static int sha2xx_reset( crypto_context *hdr, ... ) {
 	/* Note that we must not override the hdr->context value.. */
 
-	sha1_context *ctx = (sha256_context_t *)hdr;
+	sha256_context_t *ctx = (sha256_context_t *)hdr;
 	ctx->index = 0;
 
-    /* Initialize intermediate hash values */
-	ctx->H[0] = 0x6a09e667;
-	ctx->H[0] = 0xbb67ae85;
-	ctx->H[0] = 0x3c6ef372;
-	ctx->H[0] = 0xa54ff53a;
-	ctx->H[0] = 0x510e527f;
-	ctx->H[0] = 0x9b05688c;
-	ctx->H[0] = 0x1f83d9ab;
-	ctx->H[0] = 0x5be0cd19;
+    if (hdr->algorithm == TEE_ALG_SHA256) {
+    /* Initialize intermediate hash values for SHA-256 */
+        ctx->H[0] = 0x6a09e667;
+        ctx->H[1] = 0xbb67ae85;
+        ctx->H[2] = 0x3c6ef372;
+        ctx->H[3] = 0xa54ff53a;
+        ctx->H[4] = 0x510e527f;
+        ctx->H[5] = 0x9b05688c;
+        ctx->H[6] = 0x1f83d9ab;
+        ctx->H[7] = 0x5be0cd19;
+    } else {
+        /* Initialize intermediate hash values for SHA-224 */
+        ctx->H[0] = 0xc1059ed8;
+        ctx->H[1] = 0x367cd507;
+        ctx->H[2] = 0x3070dd17;
+        ctx->H[3] = 0xf70e5939;
+        ctx->H[4] = 0xffc00b31;
+        ctx->H[5] = 0x68581511;
+        ctx->H[6] = 0x64f98fa7;
+        ctx->H[7] = 0xbefa4fa4;
+    }
 	return CRYPTO_SUCCESS;
 }
-
 
 /**
  * \brief Update the hash value. This function can be called multiple times.
@@ -196,13 +199,10 @@ static int sha256_reset( crypto_context *hdr, ... ) {
  * \return Nothing.
  */
 
-static void sha256_update( crypto_context *hdr, const void *buf, int len ) {
-    sha1_context *ctx = (sha1_context *)hdr;
+static void sha2xx_update( crypto_context *hdr, const void *buf, int len ) {
+    sha256_context_t *ctx = (sha256_context_t *)hdr;
 	int pos = 0;
     uint8_t *b = (uint8_t *)buf;
-
-    assert(ctx);
-    assert(len >= 0);
 
     while (len > 0) {
         int idx = ctx->index & SHA256_BLK_MASK;
@@ -218,48 +218,47 @@ static void sha256_update( crypto_context *hdr, const void *buf, int len ) {
         ctx->index += sze;
         
         if (idx+sze == SHA256_BLK_SIZE) {
-            sha1_update_block( ctx );
+            sha2xx_update_block( ctx );
         }
     }
 }
 
 /**
- * \brief Return the SHA-1 hash of the input data so far. Note 
+ * \brief Return the SHA256 hash of the input data so far. Note 
  *   that calling this function resets the context.
  *
- * \param ctx A pointer to the SHA-1 context.
- * \param hsh A pointer to a buffer of size SHA1_HSH_SIZE.
+ * \param ctx A pointer to the SHA256 context.
+ * \param hsh A pointer to a buffer of size SHA256_HSH_SIZE.
  *
  * \return Nothing.
  */
 
-static void sha256_finish( crypto_context *hdr, uint8_t *out ) {
-	sha1_context *ctx = (sha1_context *)hdr;
+static void sha2xx_finish( crypto_context *hdr, uint8_t *out ) {
+	sha256_context_t *ctx = (sha256_context_t *)hdr;
 	int idx = ctx->index & SHA256_BLK_MASK;
     int64_t flen = ctx->index * 8;
     int32_t hlen = flen >> 32;
     int32_t llen = flen;
-
-    assert(ctx);
+    int max = hdr->algorithm == TEE_ALG_SHA224 ? 7 : 8; 
 
     ctx->buf[idx++] = 0x80;
     
     if (idx > 56) {
-        while (idx < SHA1_BLK_SIZE) {
+        while (idx < SHA256_BLK_SIZE) {
             ctx->buf[idx++] = 0;
         }
-        sha1_update_block(ctx);
+        sha2xx_update_block(ctx);
         idx = 0;
     }
 
-    while (idx < SHA1_BLK_SIZE-8) { 
+    while (idx < SHA256_BLK_SIZE-8) { 
         ctx->buf[idx++] = 0;
     }
     
     putlong(putlong(ctx->buf+idx,hlen),llen);
-    sha1_update_block(ctx);
+    sha2xx_update_block(ctx);
 
-    for (idx = 0; idx < 5; idx++) {
+    for (idx = 0; idx < max; idx++) {
         out = putlong(out,ctx->H[idx]);
     }
 }
@@ -267,18 +266,18 @@ static void sha256_finish( crypto_context *hdr, uint8_t *out ) {
 /**
  * \brief Free the sha1_context initialized and allocates using sha1_init().
  *
- * \param ctx A pointer to the SHA1 context.
+ * \param ctx A pointer to the SHA-224/256 context.
  *
  * \return Nothing.
  */
 
-static void sha256_free( crypto_context *ctx ) {
+static void sha2xx_free( crypto_context *ctx ) {
 	if (ctx) {
 		free(ctx);
 	}
 }
 
-static void sha256_free_dummy( crypto_context *ctx ) {
+static void sha2xx_free_dummy( crypto_context *ctx ) {
 }
 
 /**
@@ -300,7 +299,19 @@ crypto_context *sha256_alloc( void ) {
 	}
 
 	sha256_init((sha256_context_t *)ctx);
-	ctx->free = sha256_free;
+	ctx->free = sha2xx_free;
+	return ctx;
+}
+
+crypto_context *sha224_alloc( void ) {
+	crypto_context *ctx = malloc(sizeof(sha224_context_t));
+
+	if (ctx == NULL) {
+		return NULL;
+	}
+
+	sha224_init((sha224_context_t *)ctx);
+	ctx->free = sha2xx_free;
 	return ctx;
 }
 
@@ -313,55 +324,58 @@ crypto_context *sha256_alloc( void ) {
  *   input parameter sha1_context.
  */
 
-crypto_context *sha256_init( sha256_context_t *stx ) {
-	crypto_context *ctx = (crypto_context *)stx;
-	memset(ctx,0,sizeof(sha1_context));
+static crypto_context *sha2xx_init( crypto_context *ctx, uint32_t algo ) {
+	memset(ctx,0,sizeof(sha256_context_t));
 	
-	ctx->algorithm = TEE_ALG_SHA2;
+	ctx->algorithm = algo;
 	ctx->size = SHA256_HSH_SIZE << 3;
 	ctx->block_size = SHA256_BLK_SIZE;
 	
-	ctx->reset = sha256_reset;
-	ctx->update = sha256_update;
-	ctx->finish = sha256_finish;
-	ctx->free = sha256_free_dummy();
+	ctx->reset = sha2xx_reset;
+	ctx->update = sha2xx_update;
+	ctx->finish = sha2xx_finish;
+	ctx->free = sha2xx_free_dummy;
 	return ctx;
 }
 
 
 
-/**
- * \brief Get the memory size to embed a crypto context with SHA-1
- *
- * \return Number of octets required.
- */
-
-size_t sha256_context_size( void ) {
-	return sizeof(sha256_context_t);
+crypto_context *sha256_init( sha256_context_t *stx ) {
+	return sha2xx_init( (crypto_context *)stx, TEE_ALG_SHA256);
 }
+
+crypto_context *sha224_init( sha224_context_t *stx ) {
+    return sha2xx_init( (crypto_context *)stx, TEE_ALG_SHA224);
+}
+
+
 
 
 #if !defined(PARTOFLIBRARY)
 int main( int argc, char** argv )
 {
     int n;
-    crypto_context *ctx = sha1_alloc();
-    uint8_t hash[SHA1_HSH_SIZE];
+    crypto_context *ctx = sha256_alloc();
+    uint8_t hash[SHA256_HSH_SIZE];
 	
 	ctx->reset(ctx);
     ctx->update(ctx,argv[1],strlen(argv[1]));
 	ctx->finish(ctx,hash);
 
 
-    for (n = 0; n < SHA1_HSH_SIZE; n++) {
+    for (n = 0; n < SHA256_HSH_SIZE; n++) {
         printf("%02x",hash[n]);
     }
     printf("\n");
+    ctx->free(ctx);
+
+    sha224_context_t sha224;
+    ctx = sha224_init(&sha224);
 
 	ctx->reset(ctx);
     ctx->update(ctx,argv[1],strlen(argv[1]));
 	ctx->finish(ctx,hash);
-    for (n = 0; n < SHA1_HSH_SIZE; n++) {
+    for (n = 0; n < SHA224_HSH_SIZE; n++) {
         printf("%02x",hash[n]);
     }
     printf("\n");

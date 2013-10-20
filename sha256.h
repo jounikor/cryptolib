@@ -18,14 +18,19 @@
 #define SHA256_BLK_SIZE		64
 #define SHA224_BLK_MASK		63
 #define SHA256_BLK_MASK		63
+#define SHA256_HSH_SIZE     32
+#define SHA224_HSH_SIZE     28
 
 /* Basic inplace block SHA-224/256 calculation */
 
 typedef struct sha256_context_s {
-	int64_t index;      /* number of octets processed so far */
-    uint32_t H[8];		/* be prepared for all SHA-224/256
+	crypto_context hdr;
+    int64_t index;      /* number of octets processed so far */
+    uint32_t H[8];		/* be prepared for all SHA-224/256 */
     uint8_t buf[SHA256_BLK_SIZE];	/* lets take the maximum */
 } sha256_context_t;
+
+typedef sha256_context_t sha224_context_t;
 
 /**
  * \brief Prototypes for SHA256 calculation. 
@@ -35,7 +40,7 @@ typedef struct sha256_context_s {
 crypto_context *sha256_alloc( void );
 crypto_context *sha256_init( sha256_context_t * );
 crypto_context *sha224_alloc( void );
-crypto_context *sha224_init( sha256_context_t * );
+crypto_context *sha224_init( sha224_context_t * );
 
 
 #endif /* _sha256_h_included */

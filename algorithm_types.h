@@ -40,6 +40,7 @@ enum crypto_tags {
 	CTAG_DONE=0,	/**< End marker for a TAG list */
 	CTAG_KEY,		/**< A pointer to the key data */
 	CTAG_KEY_LEN,	/**< A length of the key data */
+    CTAG_HSH_ALGO,  /**< to distinguis between SHA224/256/384/512 */
 };
 
 
