@@ -259,7 +259,7 @@ crypto_context *hmac_init( hmac_context *htx, crypto_context *dtx ) {
 }
 
 
-//#if !defined(PARTOFLIBRARY)
+#if !defined(PARTOFLIBRARY)
 
 /*
 
@@ -333,4 +333,4 @@ int main( int argc, char** argv ) {
 	return 0;
 }
 
-//#endif
+#endif
