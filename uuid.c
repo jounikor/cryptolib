@@ -485,7 +485,7 @@ int main( int argc, char **argv ) {
 
 
 	ns = uuid_get_namespace(uuid_namespace_dns);
-    uuid_create_v5(&u3,ns,"www.widgets.com",15);
+    uuid_create_v3(&u3,ns,"www.example.com",15);
     print_uuid(&u3);
 
 

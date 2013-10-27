@@ -22,13 +22,13 @@ enum asn1_class {
 	ASN1_OBJDESC,
 	ASN1_EXT,
 	ASN1_REAL,
-	ASN1_ENUM,
+	ASN1_ENUM,          /* 0x0a */
 	ASN1_EMBEDDED,
 	ASN1_UTF8STR,
 	ASN1_RELOID,
 	ASN1_RESV1,
 	ASN1_RESV2,
-	ASN1_SEQ,
+	ASN1_SEQ,           /* 0x10 */
 	ASN1_SET,
 	ASN1_NUMSTR,
 	ASN1_PRINTSTR,
@@ -38,12 +38,12 @@ enum asn1_class {
 	ASN1_UTCTIME,
 	ASN1_GENTIME,
 	ASN1_GFXSTR,
-	ASN1_VISIBLESTR,
+	ASN1_VISIBLESTR,    /* 0x1a */
 	ASN1_GENSTR,
 	ASN1_UNISTR,
 	ASN1_CHARSTR,
 	ASN1_BMPSTR,
-	ASN1_LONFFORM
+	ASN1_LONGFORM       /* 0x1f */
 };
 
 /* Only DER is supported so far.. */
@@ -56,6 +56,10 @@ enum asn1_types {
 };
 
 enum asn1_class {
+    asn1_class_universal=0,
+    asn1_class_application,
+    asn1_class_context,   /* default */
+    asn1_class_private
 };
 
 enum asn1_pc {
@@ -64,9 +68,11 @@ enum asn1_pc {
 };
 
 
-
-
 typedef struct asn1_context_s {
+    int tag;
+    int len;
+    char constructed;
+    char class;
 
 	/* "private data" */ 
 
@@ -92,9 +98,12 @@ int get_str();
 
 /* Error codes */
 
-#define ASN1_SUCCESS		0
-
-
+#define ASN1_SUCCESS		        0
+#define ASN1_ERROR_TYPE             1   /* wrong type (ber,cer,der) */
+#define ASN1_ERROR_INVALID_CODING   2   /* cannot parse.. or encoding is invalid */
+#define ASN1_ERROR_INFINITE_FORM    3   /* only definitive length encoding supported */
+#define ASN1_ERROR_TOO_LONG         4   /* length too big for the imlementation to handle */
+#define ASN1_ERROR_INVALID_MESSAGE  5   /* broken ASN1 message encoding e.g. too short */
 
 void asn1_init();
 int asn1_parse();
