@@ -104,6 +104,7 @@ int get_str();
 #define ASN1_ERROR_INFINITE_FORM    3   /* only definitive length encoding supported */
 #define ASN1_ERROR_TOO_LONG         4   /* length too big for the imlementation to handle */
 #define ASN1_ERROR_INVALID_MESSAGE  5   /* broken ASN1 message encoding e.g. too short */
+#dedine ASN1_ERROR_LONG_FORM		7	/* long form tag values are not supported */
 
 void asn1_init();
 int asn1_parse();
