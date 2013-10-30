@@ -56,25 +56,29 @@ enum asn1_types {
 };
 
 enum asn1_class {
-    asn1_class_universal=0,
-    asn1_class_application,
-    asn1_class_context,   /* default */
-    asn1_class_private
+    asn1_class_universal    = 0x00,
+    asn1_class_application  = 0x40,
+    asn1_class_context      = 0x80,   /* default */
+    asn1_class_private      = 0xc0
 };
 
 enum asn1_pc {
-	asn1_pc_private=0,
-	asn1_pc_constructed
+	asn1_pc_private     = 0x00,
+	asn1_pc_constructed = 0x20
 };
 
 
 typedef struct asn1_context_s {
     int tag;
     int len;
-    char constructed;
-    char class;
 
 	/* "private data" */ 
+
+    char infinite;
+    char constructed;
+    char class;
+    char pad;
+
 
 	uint8_t *msg;
 	int msg_len;
@@ -100,11 +104,12 @@ int get_str();
 
 #define ASN1_SUCCESS		        0
 #define ASN1_ERROR_TYPE             1   /* wrong type (ber,cer,der) */
-#define ASN1_ERROR_INVALID_CODING   2   /* cannot parse.. or encoding is invalid */
+#define ASN1_ERROR_INVALID_VALUE    2   /* something wrong with the value */
 #define ASN1_ERROR_INFINITE_FORM    3   /* only definitive length encoding supported */
 #define ASN1_ERROR_TOO_LONG         4   /* length too big for the imlementation to handle */
 #define ASN1_ERROR_INVALID_MESSAGE  5   /* broken ASN1 message encoding e.g. too short */
 #dedine ASN1_ERROR_LONG_FORM		7	/* long form tag values are not supported */
+#define ASN1_ERROR_INVALID_TAG      8   /* tag is too long */
 
 void asn1_init();
 int asn1_parse();
