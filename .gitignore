@@ -1,5 +1,34 @@
+# Object files
 *.o
-*.dep
-*.dSYM/*
-.DS_Store
-doc/*
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+>>>>>>> 8ee0da13b000ce8a9df0e1757e39d92eae943e25
